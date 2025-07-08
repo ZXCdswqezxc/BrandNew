@@ -1,0 +1,346 @@
+-- BrandNew UI Script
+
+-- Загрузка таблицы оптимизации
+OptURL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/optimization"
+o = loadstring(game:HttpGet(OptURL))() or {}
+
+-- Загрузка UI библиотеки
+URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/Uilibrary"
+Library = loadstring(game:HttpGet(URL))()
+
+-- Темная тема
+Library.Theme = {
+    Inline = Color3.fromRGB(52, 52, 52),
+    Background = Color3.fromRGB(36, 36, 36),
+    ["Page Background"] = Color3.fromRGB(22, 22, 22),
+    ["Section Background"] = Color3.fromRGB(30, 30, 30),
+    ["Dark Background"] = Color3.fromRGB(19, 19, 19),
+    Accent = Color3.fromRGB(0, 134, 229),
+    ["Dark Text"] = Color3.fromRGB(120, 120, 120),
+    ["Light Text"] = Color3.fromRGB(160, 160, 160),
+    Text = Color3.fromRGB(220, 220, 220),
+}
+
+-- Главное окно
+Window = Library:Window({name = "BrandNew", size = UDim2.fromOffset(800, 660), open = true})
+
+-- Вкладки
+LegitBotTab = Window:Tab({name = "LegitBot", icon = "rbxassetid://6034996695"})
+RageBotTab = Window:Tab({name = "RageBot", icon = "rbxassetid://7733715400"})
+VisualsTab = Window:Tab({name = "Visuals", icon = "rbxassetid://6031075931"})
+MiscTab = Window:Tab({name = "Misc", icon = "rbxassetid://6031094678"})
+PlayerTab = Window:Tab({name = "Player", icon = "rbxassetid://6031068427"})
+ConfigTab = Window:Tab({name = "Config", icon = "rbxassetid://6031280882"})
+
+-- Конфигурации
+ConfigSection = ConfigTab:Section({name = "Configurations", description = ">_<"})
+ConfigFolder = "BrandNew/Games/Universal/Configs"
+
+-- Создание папки, если она не существует
+if not isfolder(ConfigFolder) then
+    makefolder(ConfigFolder)
+end
+
+-- Функция получения файлов конфигурации
+function GetConfigFiles()
+    files = {}
+    
+    if isfolder(ConfigFolder) then
+        for _, file in ipairs(listfiles(ConfigFolder)) do
+            if file:sub(-4) == ".cfg" then
+                configName = file:match("([^/\\]+)%.cfg$")
+                table.insert(files, configName)
+            end
+        end
+    end
+    
+    return files
+end
+
+-- Поле ввода имени конфига
+ConfigName = ConfigSection:Textbox({name = "ConfigName", placeholder = "", flag = "config_name"})
+
+-- Список конфигов
+ConfigList = ConfigSection:List({
+    name = "Config",
+    values = GetConfigFiles(),
+    value = GetConfigFiles()[1] or "",
+    size = 200,
+    flag = "config_list",
+    callback = function(v) if v then Library.Flags["config_name"] = v end end
+})
+
+-- Кнопка сохранения
+ConfigSection:Button({
+    name = "SaveConfig", description = ">_<",
+    callback = function()
+        ConfigName = Library.Flags["config_name"]
+        if not ConfigName or ConfigName == "" then ConfigName = "default" end
+        
+        if not isfolder(ConfigFolder) then makefolder(ConfigFolder) end
+        path = ConfigFolder.."/"..ConfigName..".cfg"
+        writefile(path, Library:GetConfig())
+        Library.Notification({Name = "Configs", Description = "Configuration '"..ConfigName.."' has been saved."})
+        ConfigList.Refresh(GetConfigFiles())
+    end
+})
+
+-- Кнопка загрузки
+ConfigSection:Button({
+    name = "LoadConfig", description = ">_<",
+    callback = function()
+        ConfigName = Library.Flags["config_list"]
+        if not ConfigName or ConfigName == "" then
+            Library.Notification({Name = "Configs", Description = "No config selected"})
+            return
+        end
+        
+        path = ConfigFolder.."/"..ConfigName..".cfg"
+        if isfile(path) then
+            Library.LoadConfig(readfile(path))
+            Library.Notification({Name = "Configs", Description = "Configuration '"..ConfigName.."' has been loaded."})
+        else
+            Library.Notification({Name = "Configs", Description = "Config file not found"})
+            ConfigList.Refresh(GetConfigFiles())
+        end
+    end
+})
+
+-- Кнопка удаления
+ConfigSection:Button({
+    name = "DeleteConfig", description = ">_<",
+    callback = function()
+        ConfigName = Library.Flags["config_list"]
+        if not ConfigName or ConfigName == "" then
+            Library.Notification({Name = "Configs", Description = "No config selected"})
+            return
+        end
+        
+        path = ConfigFolder.."/"..ConfigName..".cfg"
+        if isfile(path) then
+            delfile(path)
+            Library.Notification({Name = "Configs", Description = "Configuration '"..ConfigName.."' has been deleted."})
+            ConfigList.Refresh(GetConfigFiles())
+        else
+            Library.Notification({Name = "Configs", Description = "Config file not found"})
+            ConfigList.Refresh(GetConfigFiles())
+        end
+    end
+})
+
+-- Кнопка обновления списка
+ConfigSection:Button({
+    name = "RefreshList", description = ">_<",
+    callback = function()
+        ConfigList.Refresh(GetConfigFiles())
+        Library.Notification({Name = "Configs", Description = "Config list has been updated."})
+    end
+})
+
+-- Дополнительные настройки
+ExtraSection = ConfigTab:Section({name = "Extra", description = ">_<", side = "right"})
+
+-- Привязка меню к клавише
+ExtraSection:Keybind({
+    name = "MenuKeybind", 
+    key = Enum.KeyCode.RightControl, 
+    mode = "Toggle", 
+    callback = function() Window.Open() end
+})
+
+-- Глобальные переменные для ватермарки
+watermarkEnabled = false
+watermarkGui = nil
+watermarkFrame = nil
+watermarkStrokeColor = Color3.fromRGB(0, 81, 255) -- Цвет по умолчанию
+
+-- Функция создания/обновления ватермарки
+function CreateWatermark(enabled)
+    -- Удаляем старый ватермарк, если он существует
+    if watermarkGui then
+        watermarkGui:Destroy()
+        watermarkGui = nil
+        watermarkFrame = nil
+    end
+    
+    -- Если ватермарк отключен, просто выходим
+    if not enabled then
+        return
+    end
+    
+    -- Получаем необходимые сервисы
+    local Players = game:GetService("Players")
+    local TweenService = game:GetService("TweenService")
+    local UserInputService = game:GetService("UserInputService")
+    
+    local player = Players.LocalPlayer
+    local playerGui = player:WaitForChild("PlayerGui")
+    
+    -- Создаем ScreenGui
+    watermarkGui = Instance.new("ScreenGui")
+    watermarkGui.Name = "BrandNewWatermark"
+    watermarkGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    watermarkGui.Parent = playerGui
+    
+    -- Создаем элементы UI
+    watermarkFrame = Instance.new("Frame")
+    local UICorner = Instance.new("UICorner")
+    local Text = Instance.new("TextLabel")
+    local TopStroke = Instance.new("Frame")
+    
+    watermarkFrame.Name = "WaterMark"
+    watermarkFrame.Parent = watermarkGui
+    watermarkFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
+    watermarkFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    watermarkFrame.BorderSizePixel = 0
+    watermarkFrame.Position = UDim2.new(0.09700948, 0, 0.107579462, 0)
+    watermarkFrame.Size = UDim2.new(0, 300, 0, 25)
+    
+    UICorner.CornerRadius = UDim.new(0, 3)
+    UICorner.Parent = watermarkFrame
+    
+    Text.Name = "Text"
+    Text.Parent = watermarkFrame
+    Text.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Text.BackgroundTransparency = 1.000
+    Text.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Text.BorderSizePixel = 0
+    Text.Position = UDim2.new(0.0333333351, 0, 0.11, 0)
+    Text.Size = UDim2.new(0, 280, 1, 0)
+    Text.Font = Enum.Font.Sarpanch
+    Text.Text = "BrandNew | skidded | " .. player.Name .. " | " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+    Text.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Text.TextSize = 12
+    Text.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    Text.TextStrokeTransparency = 0.64
+    Text.TextXAlignment = Enum.TextXAlignment.Left
+    Text.TextYAlignment = Enum.TextYAlignment.Center
+    
+    TopStroke.Name = "TopStroke"
+    TopStroke.Parent = watermarkFrame
+    TopStroke.BackgroundColor3 = watermarkStrokeColor -- Используем глобальную переменную для цвета
+    TopStroke.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    TopStroke.BorderSizePixel = 0
+    TopStroke.Size = UDim2.new(0, 300, 0, 1)
+    
+    -- Добавляем UIStroke к TopStroke
+    local TopStrokeUIStroke = Instance.new("UIStroke")
+    TopStrokeUIStroke.Parent = TopStroke
+    TopStrokeUIStroke.Color = Color3.fromRGB(0, 0, 0)
+    TopStrokeUIStroke.Thickness = 1
+    TopStrokeUIStroke.LineJoinMode = Enum.LineJoinMode.Miter
+    
+    -- Функция для обновления размера WaterMark в зависимости от текста
+    local function updateWatermarkSize()
+        local textSize = Text.TextBounds.X
+        local newWidth = textSize + 40
+        
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(watermarkFrame, tweenInfo, {Size = UDim2.new(0, newWidth, 0, 25)})
+        tween:Play()
+        
+        local strokeTween = TweenService:Create(TopStroke, tweenInfo, {Size = UDim2.new(0, newWidth, 0, 1)})
+        strokeTween:Play()
+    end
+    
+    Text:GetPropertyChangedSignal("Text"):Connect(updateWatermarkSize)
+    updateWatermarkSize()
+    
+    -- Drag and drop функционал
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+    
+    local function update(input)
+        local delta = input.Position - dragStart
+        local newPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        
+        local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(watermarkFrame, tweenInfo, {Position = newPosition})
+        tween:Play()
+    end
+    
+    watermarkFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = watermarkFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    watermarkFrame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+end
+
+-- Тогл ватермарки с привязанным попапом
+local WatermarkToggle = ExtraSection:Toggle({
+    name = "Watermark", 
+    description = ">_<",
+    default = false,
+    flag = "watermark_enabled",
+    callback = function(value)
+        watermarkEnabled = value
+        CreateWatermark(watermarkEnabled)
+    end
+})
+
+-- Создаем попап для настроек ватермарки
+local WatermarkPopup = WatermarkToggle:Popup({size = 150})
+
+-- Колорпикер для изменения цвета верхней линии ватермарки в попапе
+WatermarkPopup:Colorpicker({
+    name = "Watermark Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 81, 255),
+    flag = "watermark_color",
+    callback = function(color)
+        -- Проверяем тип переданного значения
+        if type(color) == "table" and color.c then
+            watermarkStrokeColor = color.c
+        else
+            watermarkStrokeColor = color
+        end
+        
+        -- Обновляем цвет, если ватермарка активна
+        if watermarkEnabled and watermarkFrame and watermarkFrame:FindFirstChild("TopStroke") then
+            watermarkFrame.TopStroke.BackgroundColor3 = watermarkStrokeColor
+        end
+    end
+})
+
+-- Привязка переключения UI к клавише
+o.uis.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.RightControl then
+        Window.Open()
+    end
+end)
+
+-- Установка вкладки по умолчанию
+LegitBotTab.Set(true)
+
+-- Периодическое обновление списка конфигов
+spawn(function()
+    while task.wait(5) do
+        if Window.Visible then
+            ConfigList.Refresh(GetConfigFiles())
+        end
+    end
+end)
+
+print("script is loaded. If u paid for this, u are retard")
