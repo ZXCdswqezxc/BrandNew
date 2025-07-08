@@ -4528,7 +4528,7 @@ local Env = getgenv()
             cfg = cfg or { }; cfg = Library.Config(cfg, {
                 name = "New Keybind",
                 value = false,
-                key = Enum.KeyCode.E,
+                key = Enum.KeyCode.Unknown,
                 mode = "Toggle",
                 callback = function() end,
                 flag = nil,
