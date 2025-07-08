@@ -5007,7 +5007,8 @@ local Env = getgenv()
             end))
 
             Utility.Signal(UserInputService.InputBegan:Connect(function(input) 
-                if input.KeyCode == Keybind.Key or input.UserInputType == Keybind.Key then 
+                -- Не обрабатываем нажатия, если кейбинд установлен на Unknown
+                if Keybind.Key ~= Enum.KeyCode.Unknown and (input.KeyCode == Keybind.Key or input.UserInputType == Keybind.Key) then 
                     local Value = Keybind.Mode ~= "Toggle" or not Keybind.Value
                     Keybind.Set( Value )
 
@@ -5017,7 +5018,8 @@ local Env = getgenv()
                         end
 
                         Keybind.OnHold = Utility.Signal(UserInputService.InputEnded:Connect(function(input) 
-                            if input.KeyCode == Keybind.Key or input.UserInputType == Keybind.Key then 
+                            -- Проверяем, что кейбинд не Unknown и что это правильная клавиша
+                            if Keybind.Key ~= Enum.KeyCode.Unknown and (input.KeyCode == Keybind.Key or input.UserInputType == Keybind.Key) then 
                                 Keybind.Set( false )
 
                                 if Keybind.OnHold then 
