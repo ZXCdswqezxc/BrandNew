@@ -5580,6 +5580,153 @@ local Env = getgenv()
             end
         end
 
+        -- Config Manager System
+        function Library.CreateConfigManager(tab, options)
+            options = options or {}
+            local side = options.side or "left"
+            local sectionName = options.name or "Config Manager"
+            local sectionDesc = options.description or "Save and load your configurations"
+            local folderPath = options.folderPath or (Folder.."/Games/"..(Game and Game.Name or "Universal").."/Configs")
+            
+            if not isfolder(folderPath) then
+                makefolder(folderPath)
+            end
+            
+            -- Create section for config manager
+            local ConfigSection = tab:Section({
+                name = sectionName,
+                description = sectionDesc,
+                side = side
+            })
+            
+            -- Config name textbox
+            local configNameTextbox = ConfigSection:Textbox({
+                name = "Config Name",
+                placeholder = "Enter config name...",
+                flag = "ui_config_name"
+            })
+            
+            -- Get list of configs
+            local function GetConfigList()
+                local configs = {}
+                if isfolder(folderPath) then
+                    for _, file in ipairs(listfiles(folderPath)) do
+                        if file:sub(-5) == ".json" then
+                            local configName = file:match("([^/\\]+)%.json$")
+                            table.insert(configs, configName)
+                        end
+                    end
+                end
+                if #configs == 0 then
+                    return {"No configs found"}
+                end
+                return configs
+            end
+            
+            -- Config list dropdown
+            local configListDropdown = ConfigSection:Dropdown({
+                name = "Saved Configs",
+                description = "Select a saved configuration",
+                values = GetConfigList(),
+                callback = function(value)
+                    if value ~= "No configs found" then
+                        Library.Flags["ui_config_name"] = value
+                    end
+                end,
+                flag = "ui_selected_config"
+            })
+            
+            -- Function to refresh the dropdown
+            local function RefreshConfigList()
+                local configs = GetConfigList()
+                configListDropdown:Refresh(configs)
+                if #configs > 0 and configs[1] ~= "No configs found" then
+                    configListDropdown:Set(configs[1])
+                else
+                    configListDropdown:Set("No configs found")
+                end
+            end
+            
+            -- Save config button
+            ConfigSection:Button({
+                name = "Save Config",
+                description = "Save current settings to a config file",
+                callback = function()
+                    local configName = Library.Flags["ui_config_name"]
+                    if not configName or configName == "" or configName == "No configs found" then
+                        configName = "default"
+                    end
+                    
+                    local configPath = folderPath.."/"..configName..".json"
+                    local configData = Library.GetConfig()
+                    
+                    writefile(configPath, configData)
+                    Library.Notification({ name = "Config Saved", description = "Configuration '"..configName.."' has been saved." })
+                    
+                    RefreshConfigList()
+                end
+            })
+            
+            -- Load config button
+            ConfigSection:Button({
+                name = "Load Config",
+                description = "Load selected configuration",
+                callback = function()
+                    local configName = Library.Flags["ui_selected_config"]
+                    if not configName or configName == "No configs found" then
+                        Library.Notification({ name = "Error", description = "No config selected" })
+                        return
+                    end
+                    
+                    local configPath = folderPath.."/"..configName..".json"
+                    if isfile(configPath) then
+                        local data = readfile(configPath)
+                        Library.LoadConfig(data)
+                        Library.Notification({ name = "Config Loaded", description = "Configuration '"..configName.."' has been loaded." })
+                    else
+                        Library.Notification({ name = "Error", description = "Config file not found" })
+                    end
+                end
+            })
+            
+            -- Delete config button
+            ConfigSection:Button({
+                name = "Delete Config",
+                description = "Delete selected configuration",
+                callback = function()
+                    local configName = Library.Flags["ui_selected_config"]
+                    if not configName or configName == "No configs found" then
+                        Library.Notification({ name = "Error", description = "No config selected" })
+                        return
+                    end
+                    
+                    local configPath = folderPath.."/"..configName..".json"
+                    if isfile(configPath) then
+                        delfile(configPath)
+                        Library.Notification({ name = "Config Deleted", description = "Configuration '"..configName.."' has been deleted." })
+                        RefreshConfigList()
+                    else
+                        Library.Notification({ name = "Error", description = "Config file not found" })
+                    end
+                end
+            })
+            
+            -- Refresh list button
+            ConfigSection:Button({
+                name = "Refresh List",
+                description = "Refresh the config list",
+                callback = function()
+                    RefreshConfigList()
+                    Library.Notification({ name = "List Refreshed", description = "Config list has been updated." })
+                end
+            })
+            
+            return {
+                Section = ConfigSection,
+                RefreshList = RefreshConfigList
+            }
+        end
+
         function Library.Unload()
             for _,obj in Utility.Connections do
                 obj:Disconnect()
