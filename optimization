@@ -76,6 +76,14 @@ local o = {
         rfoot = "RightFoot"
     },
     
+    -- Materials
+    materials = {
+        forcefield = Enum.Material.ForceField,
+        neon = Enum.Material.Neon,
+        plastic = Enum.Material.SmoothPlastic,
+        glass = Enum.Material.Glass
+    },
+    
     -- Common Functions
     funcs = {
         wfc = function(parent, name) -- WaitForChild
@@ -239,7 +247,21 @@ local o = {
         files = {},
         
         -- Connections
-        tempConn = nil
+        tempConn = nil,
+        
+        -- Desync variables
+        shouldShowClone = nil,
+        materialName = nil,
+        material = nil,
+        color = nil,
+        isActive = nil,
+        previousStatus = nil,
+        isDesyncActive = nil,
+        relativeOffset = nil,
+        desyncFactor = nil,
+        
+        -- Visualization
+        originalPart = nil
     }
 }
 
@@ -332,6 +354,20 @@ end
 function o.IsGrounded()
     local hum = o.GetHum()
     return hum and hum:GetState() == Enum.HumanoidStateType.Running
+end
+
+-- Добавляем функцию для получения материала по имени
+function o.getMaterial(name)
+    if name == "ForceField" then
+        return o.materials.forcefield
+    elseif name == "Neon" then
+        return o.materials.neon
+    elseif name == "SmoothPlastic" then
+        return o.materials.plastic
+    elseif name == "Glass" then
+        return o.materials.glass
+    end
+    return o.materials.forcefield
 end
 
 return o 
