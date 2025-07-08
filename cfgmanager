@@ -67,7 +67,18 @@ function ConfigManager.Init(Library, tab, options)
     local function RefreshConfigList()
         local configs = GetConfigList()
         if ConfigDropdown and ConfigDropdown.Refresh then
-            ConfigDropdown:Refresh(configs)
+            -- Use pcall to catch any errors during refresh
+            local success, error = pcall(function()
+                ConfigDropdown:Refresh(configs)
+            end)
+            
+            if not success then
+                -- Fallback method if refresh fails
+                if ConfigDropdown and ConfigDropdown.Objects and ConfigDropdown.Objects.Value then
+                    ConfigDropdown.Objects.Value.Text = configs[1] or "No configs found"
+                end
+                print("Config refresh error:", error)
+            end
         end
     end
     
