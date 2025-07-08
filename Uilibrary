@@ -3567,17 +3567,27 @@ local Env = getgenv()
                 if cfg.multi then
                     local CurrentText = {}
 
-                    if #Value > 0 then
+                    if Value and #Value > 0 then
                         for _,item in Value do
-                            table.insert(CurrentText, item)
-        
+                            if type(item) == "string" then
+                                table.insert(CurrentText, item)
+                            end
+                        end
+                        
+                        if #CurrentText > 0 then
                             Objects.Value.Text = table.concat(CurrentText, ", ")
+                        else
+                            Objects.Value.Text = "-"
                         end
                     else
                         Objects.Value.Text = "-"
                     end
                 else
-                    Objects.Value.Text = Value == "" or Value == nil and "-" or Value
+                    if type(Value) == "string" then
+                        Objects.Value.Text = Value ~= "" and Value or "-" 
+                    else
+                        Objects.Value.Text = "-"
+                    end
                 end
             end
 
@@ -3714,23 +3724,27 @@ local Env = getgenv()
                         end
                     end
                 else
-                    for _,item in Dropdown.Items do
-                        item.Select(item.Name == value)
-                    end
+                                    for _,item in Dropdown.Items do
+                    item.Select(item.Name == value)
+                end
 
-                    Dropdown.Value = value
+                Dropdown.Value = type(value) == "string" and value or nil
 
-                    Dropdown.Display()
+                Dropdown.Display()
 
-                    if not ignore then
-                        cfg.callback(Dropdown.Value)
-                    end
+                if not ignore then
+                    cfg.callback(Dropdown.Value)
+                end
 
-                    Library.Flags[cfg.flag] = Dropdown.Value
+                Library.Flags[cfg.flag] = Dropdown.Value
                 end
             end
 
             function Dropdown.Add(name)
+                if type(name) ~= "string" then
+                    return
+                end
+                
                 local Item = {
                     Objects = {},
 
@@ -3782,9 +3796,11 @@ local Env = getgenv()
                 Dropdown.Items = { }
 
                 Dropdown.Value = cfg.multi and { } or nil
-
+                
                 for _,item in tbl do
-                    Dropdown.Add(item)
+                    if type(item) == "string" then
+                        Dropdown.Add(item)
+                    end
                 end
 
                 Dropdown.Display()
