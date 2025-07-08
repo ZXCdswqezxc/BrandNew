@@ -32,6 +32,614 @@ MiscTab = Window:Tab({name = "Misc", icon = "rbxassetid://6031094678"})
 PlayerTab = Window:Tab({name = "Player", icon = "rbxassetid://6031068427"})
 ConfigTab = Window:Tab({name = "Config", icon = "rbxassetid://6031280882"})
 
+-- Создаем секцию Main во вкладке Player
+PlayerMainSection = PlayerTab:Section({name = "Main", description = ">_<"})
+
+-- Создаем секцию Movement во вкладке Player (справа)
+PlayerMovementSection = PlayerTab:Section({name = "Movement", description = ">_<", side = "right"})
+
+-- Конфигурация SpeedHack
+o.SpeedhackConfig = {
+    Enabled = false,
+    Active = false,
+    Speed = 50
+}
+
+-- Конфигурация Fly
+o.FlyConfig = {
+    Enabled = false,
+    Active = false,
+    UseCamera = false,     -- Режим следования за направлением камеры
+    Speed = 1,             -- Базовая скорость
+    SpeedMultiplier = 5,   -- Общий множитель скорости
+    VerticalSpeedMultiplier = 0.3, -- Множитель для вертикального движения
+    UpKey = nil,           -- Клавиша для движения вверх (по умолчанию не назначена)
+    DownKey = nil          -- Клавиша для движения вниз (по умолчанию не назначена)
+}
+
+-- Функция для включения/выключения коллизий у персонажа
+local function setNoClip(character, state)
+    if not character then return end
+    
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA('BasePart') then
+            if state then
+                -- Сохраняем оригинальные значения
+                if not part:GetAttribute('OriginalCollision') then
+                    part:SetAttribute('OriginalCollision', part.CanCollide)
+                    part:SetAttribute('OriginalTouch', part.CanTouch)
+                    if part:GetAttribute('CanQuery') ~= nil then
+                        part:SetAttribute('OriginalQuery', part.CanQuery)
+                    end
+                end
+                -- Отключаем коллизии
+                part.CanCollide = false
+                part.CanTouch = false
+                part.CanQuery = false
+            else
+                -- Восстанавливаем оригинальные значения
+                if part:GetAttribute('OriginalCollision') ~= nil then
+                    part.CanCollide = part:GetAttribute('OriginalCollision')
+                    part.CanTouch = part:GetAttribute('OriginalTouch')
+                    if part:GetAttribute('OriginalQuery') ~= nil then
+                        part.CanQuery = part:GetAttribute('OriginalQuery')
+                    end
+                    -- Очищаем атрибуты
+                    part:SetAttribute('OriginalCollision', nil)
+                    part:SetAttribute('OriginalTouch', nil)
+                    part:SetAttribute('OriginalQuery', nil)
+                end
+            end
+        end
+    end
+end
+
+-- Основная функция полета
+local function updateFly(character)
+    if o.FlyLoop then
+        o.FlyLoop:Disconnect()
+        o.FlyLoop = nil
+    end
+    
+    if not character or not (o.FlyConfig.Enabled and o.FlyConfig.Active) then 
+        return 
+    end
+    
+    -- Включаем NoClip
+    setNoClip(character, true)
+    
+    -- Создаем основной цикл полета
+    o.FlyLoop = o.rs.Stepped:Connect(function()
+        o.common_vars.char = o.lp.Character
+        if not o.common_vars.char then return end
+        
+        o.common_vars.hrp = o.common_vars.char:FindFirstChild(o.r15.root)
+        o.common_vars.hum = o.common_vars.char:FindFirstChild('Humanoid')
+        if not o.common_vars.hrp or not o.common_vars.hum then return end
+        
+        -- Рассчитываем скорость с учетом множителей
+        o.common_vars.baseSpeed = o.FlyConfig.Speed * o.FlyConfig.SpeedMultiplier
+        o.common_vars.verticalSpeed = o.common_vars.baseSpeed * o.FlyConfig.VerticalSpeedMultiplier
+        o.common_vars.velocity = o.funcs.v3(0, 0, 0)
+        
+        o.common_vars.camCF = o.camera.CFrame
+        o.common_vars.moveDir = o.funcs.v3()
+        
+        -- Обработка горизонтального движения (всегда с учетом направления камеры)
+        if o.uis:IsKeyDown(Enum.KeyCode.W) then
+            o.common_vars.moveDir = o.common_vars.moveDir + o.funcs.v3(o.common_vars.camCF.LookVector.X, 0, o.common_vars.camCF.LookVector.Z).Unit -- Вперед (только XZ)
+        end
+        if o.uis:IsKeyDown(Enum.KeyCode.A) then
+            o.common_vars.moveDir = o.common_vars.moveDir - o.funcs.v3(o.common_vars.camCF.RightVector.X, 0, o.common_vars.camCF.RightVector.Z).Unit -- Влево (только XZ)
+        end
+        if o.uis:IsKeyDown(Enum.KeyCode.S) then
+            o.common_vars.moveDir = o.common_vars.moveDir - o.funcs.v3(o.common_vars.camCF.LookVector.X, 0, o.common_vars.camCF.LookVector.Z).Unit -- Назад (только XZ)
+        end
+        if o.uis:IsKeyDown(Enum.KeyCode.D) then
+            o.common_vars.moveDir = o.common_vars.moveDir + o.funcs.v3(o.common_vars.camCF.RightVector.X, 0, o.common_vars.camCF.RightVector.Z).Unit -- Вправо (только XZ)
+        end
+        
+        -- Нормализация и применение скорости к горизонтальному движению
+        if o.common_vars.moveDir.Magnitude > 0 then
+            o.common_vars.moveDir = o.common_vars.moveDir.Unit * o.common_vars.baseSpeed
+            o.common_vars.velocity = o.funcs.v3(o.common_vars.moveDir.X, o.common_vars.velocity.Y, o.common_vars.moveDir.Z)
+        end
+        
+        -- Обработка вертикального движения в зависимости от режима
+        if o.FlyConfig.UseCamera then
+            -- Режим с учетом направления камеры
+            if o.uis:IsKeyDown(Enum.KeyCode.W) then
+                o.common_vars.velocity = o.common_vars.velocity + o.funcs.v3(0, o.common_vars.camCF.LookVector.Y * o.common_vars.baseSpeed, 0) -- Вертикальное движение по направлению камеры
+            end
+            if o.uis:IsKeyDown(Enum.KeyCode.S) then
+                o.common_vars.velocity = o.common_vars.velocity - o.funcs.v3(0, o.common_vars.camCF.LookVector.Y * o.common_vars.baseSpeed, 0) -- Вертикальное движение по направлению камеры
+            end
+        end
+        
+        -- Дополнительные кнопки для вертикального движения (работают в обоих режимах)
+        if o.FlyConfig.UpKey and o.uis:IsKeyDown(o.FlyConfig.UpKey) then
+            o.common_vars.velocity = o.common_vars.velocity + o.funcs.v3(0, o.common_vars.verticalSpeed, 0) -- Вверх
+        end
+        if o.FlyConfig.DownKey and o.uis:IsKeyDown(o.FlyConfig.DownKey) then
+            o.common_vars.velocity = o.common_vars.velocity - o.funcs.v3(0, o.common_vars.verticalSpeed, 0) -- Вниз
+        end
+        
+        -- Применяем скорость
+        o.common_vars.hrp.Velocity = o.common_vars.velocity
+        o.common_vars.hum:ChangeState('Freefall')
+    end)
+end
+
+-- Останавливает полет
+local function stopFly()
+    if o.FlyLoop then
+        o.FlyLoop:Disconnect()
+        o.FlyLoop = nil
+    end
+    
+    o.common_vars.char = o.lp.Character
+    setNoClip(o.common_vars.char, false)
+    
+    if o.common_vars.char then
+        o.common_vars.hrp = o.common_vars.char:FindFirstChild(o.r15.root)
+        o.common_vars.hum = o.common_vars.char:FindFirstChild('Humanoid')
+        
+        -- Плавное падение при выключении
+        if o.common_vars.hrp then
+            o.common_vars.hrp.Velocity = o.funcs.v3(0, -2, 0)
+            o.common_vars.tempConn = o.rs.Stepped:Connect(function()
+                if not o.common_vars.hrp or not o.common_vars.hrp.Parent then
+                    o.common_vars.tempConn:Disconnect()
+                    return
+                end
+                o.common_vars.hrp.Velocity = o.funcs.v3(0, o.common_vars.hrp.Velocity.Y, 0)
+                o.common_vars.tempConn:Disconnect()
+            end)
+        end
+        
+        if o.common_vars.hum then
+            o.common_vars.hum:ChangeState('Landing')
+        end
+    end
+end
+
+-- Функция обновления SpeedHack
+local function updateSpeedHack(character)
+    if not character then return end
+    
+    -- Используем функции из таблицы оптимизации для получения частей персонажа
+    o.common_vars.rootPart = character:WaitForChild(o.r15.root)
+    o.common_vars.humanoid = character:WaitForChild('Humanoid')
+    
+    -- Отключаем предыдущее соединение, если оно существует
+    if o.speedHackConnection then
+        o.speedHackConnection:Disconnect()
+    end
+    
+    -- Создаем новое соединение с Heartbeat, используя o.rs из таблицы оптимизации
+    o.speedHackConnection = o.rs.Heartbeat:Connect(function(dt)
+        if o.SpeedhackConfig.Enabled and o.SpeedhackConfig.Active then
+            o.common_vars.move = o.common_vars.humanoid.MoveDirection
+            if o.common_vars.move.Magnitude > 0 then
+                -- Используем функцию из таблицы оптимизации для создания CFrame
+                o.common_vars.newPos = o.common_vars.rootPart.Position + (o.common_vars.move.Unit * o.SpeedhackConfig.Speed * dt)
+                o.common_vars.rootPart.CFrame = o.funcs.cf(o.common_vars.newPos.X, o.common_vars.newPos.Y, o.common_vars.newPos.Z) * CFrame.Angles(0, math.atan2(-o.common_vars.move.X, -o.common_vars.move.Z), 0)
+            end
+        end
+    end)
+end
+
+-- Добавляем тогл SpeedHack с попапом
+local SpeedHackToggle = PlayerMovementSection:Toggle({
+    name = "Speedhack",
+    default = false,
+    flag = "player_speedhack",
+    callback = function(value)
+        o.SpeedhackConfig.Enabled = value
+        
+        -- Обновляем SpeedHack при включении/выключении
+        if value then
+            if o.lp.Character then
+                updateSpeedHack(o.lp.Character)
+                -- Добавляем уведомление при включении
+                Library.Notification({Name = "Speedhack", Description = "Press keybind to activate"})
+            end
+        else
+            -- Отключаем соединение при выключении
+            if o.speedHackConnection then
+                o.speedHackConnection:Disconnect()
+                o.speedHackConnection = nil
+            end
+            -- Сбрасываем флаг активности
+            o.SpeedhackConfig.Active = false
+        end
+    end
+})
+
+-- Создаем попап для настроек SpeedHack
+local SpeedHackPopup = SpeedHackToggle:Popup({size = 150})
+
+-- Добавляем кейбинд в попап для SpeedHack
+SpeedHackPopup:Keybind({
+    name = "Activation Key",
+    flag = "speedhack_key",
+    callback = function()
+        -- Переключаем активность SpeedHack только если включен тогл
+        if o.SpeedhackConfig.Enabled then
+            o.SpeedhackConfig.Active = not o.SpeedhackConfig.Active
+            
+            -- Показываем уведомление о текущем состоянии
+            o.common_vars.status = o.SpeedhackConfig.Active and "on" or "off"
+            Library.Notification({Name = "Speedhack", Description = o.common_vars.status})
+        end
+    end
+})
+
+-- Добавляем текстбокс для настройки скорости в попап
+SpeedHackPopup:Textbox({
+    name = "Speed",
+    placeholder = "50",
+    default = "50",
+    flag = "speedhack_speed_text",
+    callback = function(text)
+        -- Преобразуем текст в число
+        o.common_vars.speed = tonumber(text)
+        
+        -- Проверяем, что введено число
+        if o.common_vars.speed then
+            o.SpeedhackConfig.Speed = o.common_vars.speed
+        end
+    end
+})
+
+-- Добавляем тогл Fly с попапом
+local FlyToggle = PlayerMovementSection:Toggle({
+    name = "Fly",
+    default = false,
+    flag = "player_fly",
+    callback = function(value)
+        o.FlyConfig.Enabled = value
+        
+        if value then
+            if o.lp.Character then
+                -- Не активируем полет автоматически, только включаем возможность
+                Library.Notification({Name = "Fly", Description = "Press keybind to activate"})
+            end
+        else
+            -- При выключении тогла останавливаем полет
+            o.FlyConfig.Active = false
+            stopFly()
+        end
+    end
+})
+
+-- Создаем попап для настроек Fly
+local FlyPopup = FlyToggle:Popup({size = 150})
+
+-- Добавляем кейбинд для активации в попап для Fly
+FlyPopup:Keybind({
+    name = "Activation Key",
+    flag = "fly_key",
+    callback = function()
+        -- Переключаем активность Fly только если включен тогл
+        if o.FlyConfig.Enabled then
+            o.FlyConfig.Active = not o.FlyConfig.Active
+            
+            -- Показываем уведомление о текущем состоянии
+            o.common_vars.status = o.FlyConfig.Active and "on" or "off"
+            Library.Notification({Name = "Fly", Description = o.common_vars.status})
+            
+            -- Обновляем состояние полета
+            if o.FlyConfig.Active then
+                updateFly(o.lp.Character)
+            else
+                stopFly()
+            end
+        end
+    end
+})
+
+-- Добавляем тогл UseCamera в попап
+FlyPopup:Toggle({
+    name = "UseCamera",
+    default = false,
+    flag = "fly_usecamera",
+    callback = function(value)
+        o.FlyConfig.UseCamera = value
+    end
+})
+
+-- Добавляем кейбинд для движения вверх
+FlyPopup:Keybind({
+    name = "Up Key",
+    flag = "fly_up_key",
+    callback = function(key)
+        -- Сохраняем ключ в конфигурации
+        o.FlyConfig.UpKey = key == Enum.KeyCode.Unknown and nil or key
+    end
+})
+
+-- Добавляем кейбинд для движения вниз
+FlyPopup:Keybind({
+    name = "Down Key",
+    flag = "fly_down_key",
+    callback = function(key)
+        -- Сохраняем ключ в конфигурации
+        o.FlyConfig.DownKey = key == Enum.KeyCode.Unknown and nil or key
+    end
+})
+
+-- Добавляем текстбокс для настройки множителя скорости
+FlyPopup:Textbox({
+    name = "Speed",
+    placeholder = "5",
+    default = "5",
+    flag = "fly_speed_text",
+    callback = function(text)
+        -- Преобразуем текст в число
+        o.common_vars.speed = tonumber(text)
+        
+        -- Проверяем, что введено число
+        if o.common_vars.speed then
+            o.FlyConfig.SpeedMultiplier = o.common_vars.speed
+        end
+    end
+})
+
+-- Подключение к событию изменения персонажа
+o.lp.CharacterAdded:Connect(function(char)
+    if o.SpeedhackConfig.Enabled then
+        updateSpeedHack(char)
+    end
+    
+    -- Также проверяем Fly
+    if o.FlyConfig.Enabled and o.FlyConfig.Active then
+        updateFly(char)
+    end
+end)
+
+-- Добавляем тогл Anti AFK
+PlayerMainSection:Toggle({
+    name = "Anti AFK",
+    default = false,
+    flag = "player_antiafk",
+    callback = function(value)
+        if value then
+            -- Создаем и запускаем Anti AFK скрипт
+            o.antiAFKConnection = o.lp.Idled:Connect(function()
+                o.VirtualUser = game:GetService("VirtualUser")
+                o.VirtualUser:CaptureController()
+                o.VirtualUser:ClickButton2(Vector2.new())
+            end)
+            
+            -- Сохраняем соединение в Library.Flags для возможности отключения
+            Library.Flags["antiafk_connection"] = o.antiAFKConnection
+        else
+            -- Отключаем Anti AFK если тогл выключен
+            if o.antiAFKConnection then
+                o.antiAFKConnection:Disconnect()
+                o.antiAFKConnection = nil
+                Library.Flags["antiafk_connection"] = nil
+            end
+        end
+    end
+})
+
+-- Добавляем тогл FakeMacro (только с LeftControl)
+PlayerMainSection:Toggle({
+    name = "Fake Macro",
+    default = false,
+    flag = "player_fakemacro",
+    callback = function(value)
+        -- Включаем/выключаем FakeMacro
+        Library.Flags["fakemacro_enabled"] = value
+        
+        -- Показываем уведомление при включении
+        if value then
+            Library.Notification({Name = "Fake Macro", Description = "Hold LeftControl to macro"})
+        end
+        
+        -- Управляем соединениями
+        if value then
+            -- Создаем соединения, если их еще нет
+            if not Library.Flags["fakemacro_connections"] then
+                -- Глобальная переменная для отслеживания состояния
+                o.toggleEnabled = false
+                
+                -- Соединение для отслеживания нажатия клавиши LeftControl
+                o.fakeMacroInputBegan = o.uis.InputBegan:Connect(function(input, gameProcessed)
+                    if input.KeyCode == Enum.KeyCode.LeftControl and not gameProcessed then
+                        o.toggleEnabled = true
+                    end
+                end)
+                
+                -- Соединение для отслеживания отпускания клавиши LeftControl
+                o.fakeMacroInputEnded = o.uis.InputEnded:Connect(function(input, gameProcessed)
+                    if input.KeyCode == Enum.KeyCode.LeftControl and not gameProcessed then
+                        o.toggleEnabled = false
+                    end
+                end)
+                
+                -- Соединение для обновления ориентации персонажа
+                o.fakeMacroHeartbeat = o.rs.Heartbeat:Connect(function()
+                    if o.toggleEnabled then
+                        if o.lp.Character then
+                            if o.lp.Character:FindFirstChild("HumanoidRootPart") then
+                                if o.camera then
+                                    o.lp.Character.HumanoidRootPart.CFrame = CFrame.new(o.lp.Character.HumanoidRootPart.Position) * 
+                                        CFrame.Angles(0, math.atan2(-o.camera.CFrame.LookVector.X, -o.camera.CFrame.LookVector.Z), 0)
+                                end
+                            end
+                        end
+                    end
+                end)
+                
+                -- Сохраняем соединения для возможности отключения
+                Library.Flags["fakemacro_connections"] = {
+                    inputBegan = o.fakeMacroInputBegan,
+                    inputEnded = o.fakeMacroInputEnded,
+                    heartbeat = o.fakeMacroHeartbeat
+                }
+            end
+        else
+            -- Отключаем соединения, если тогл выключен
+            if Library.Flags["fakemacro_connections"] then
+                if o.fakeMacroInputBegan then o.fakeMacroInputBegan:Disconnect() end
+                if o.fakeMacroInputEnded then o.fakeMacroInputEnded:Disconnect() end
+                if o.fakeMacroHeartbeat then o.fakeMacroHeartbeat:Disconnect() end
+                Library.Flags["fakemacro_connections"] = nil
+            end
+        end
+    end
+})
+
+-- Функция для изменения настроек отображения имен
+function SetNameDisplay(enabled, mode)
+    o.NameDisplayEnabled = enabled
+    o.NameDisplayMode = mode or "display"
+    
+    -- Сохраняем режим в флагах для использования в других местах
+    Library.Flags["name_display_actual_mode"] = o.NameDisplayMode
+    
+    -- Обновить все имена
+    for _, player in ipairs(o.plrs:GetPlayers()) do
+        if player.Character then
+            o.humanoid = player.Character:FindFirstChild("Humanoid")
+            if o.humanoid then
+                -- Всегда сбрасываем параметры отображения к стандартным при выключении тогла
+                if not o.NameDisplayEnabled then
+                    -- Возвращаем исходное отображение имени
+                    o.humanoid.DisplayName = player.DisplayName
+                    o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                    
+                    -- Если были удалены BillboardGui на голове, восстановим систему имен
+                    o.head = player.Character:FindFirstChild("Head")
+                    if o.head then
+                        -- Если никаких билбордов нет, это может означать, что они были удалены
+                        o.common_vars.hasBillboard = false
+                        for _, child in ipairs(o.head:GetChildren()) do
+                            if child:IsA("BillboardGui") then
+                                o.common_vars.hasBillboard = true
+                                break
+                            end
+                        end
+                        
+                        -- Принудительно обновляем персонажа для восстановления имен если нужно
+                        if not o.common_vars.hasBillboard then
+                            -- Обновляем настройки гуманоида для восстановления отображения имени
+                            task.delay(0.1, function()
+                                if o.humanoid then
+                                    o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Subject
+                                    task.delay(0.1, function()
+                                        if o.humanoid then
+                                            o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                                        end
+                                    end)
+                                end
+                            end)
+                        end
+                    end
+                else
+                    if o.NameDisplayMode == "display" then
+                        o.humanoid.DisplayName = player.DisplayName
+                        o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                    elseif o.NameDisplayMode == "original" then
+                        o.humanoid.DisplayName = player.Name
+                        o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                    elseif o.NameDisplayMode == "none" then
+                        -- Полностью скрываем имя, устанавливая пустую строку И делая его прозрачным
+                        o.humanoid.DisplayName = ""
+                        o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+                        -- Для дополнительной надежности также пробуем другие методы скрытия имени
+                        o.head = player.Character:FindFirstChild("Head")
+                        if o.head then
+                            -- Удаляем существующие текстовые метки над головой
+                            for _, child in ipairs(o.head:GetChildren()) do
+                                if child:IsA("BillboardGui") then
+                                    child:Destroy()
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Настраиваем обработчики для новых игроков и персонажей
+    if not Library.Flags["name_display_connection"] then
+        o.nameDisplayConnection = o.plrs.PlayerAdded:Connect(function(player)
+            player.CharacterAdded:Connect(function(character)
+                o.humanoid = character:FindFirstChild("Humanoid")
+                if o.humanoid then
+                    if Library.Flags["player_alwaysshow"] then
+                        o.common_vars.mode = Library.Flags["name_display_actual_mode"]
+                        if o.common_vars.mode == "display" then
+                            o.humanoid.DisplayName = player.DisplayName
+                            o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                        elseif o.common_vars.mode == "original" then
+                            o.humanoid.DisplayName = player.Name
+                            o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                        elseif o.common_vars.mode == "none" then
+                            o.humanoid.DisplayName = ""
+                            o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+                            
+                            -- Дополнительные методы для полного скрытия имени
+                            task.delay(0.5, function() -- Небольшая задержка для гарантии загрузки головы
+                                if player.Character and player.Character:FindFirstChild("Head") then
+                                    for _, child in ipairs(player.Character.Head:GetChildren()) do
+                                        if child:IsA("BillboardGui") then
+                                            child:Destroy()
+                                        end
+                                    end
+                                end
+                            end)
+                        end
+                    else
+                        -- Если тогл выключен, восстанавливаем имя
+                        o.humanoid.DisplayName = player.DisplayName
+                        o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                    end
+                end
+            end)
+        end)
+        
+        -- Сохраняем соединение для возможности отключения
+        Library.Flags["name_display_connection"] = o.nameDisplayConnection
+    end
+end
+
+-- Добавляем тогл AlwaysShow с попапом для настройки отображения имен
+PlayerMainSection:Toggle({
+    name = "AlwaysShow",
+    default = false,
+    flag = "player_alwaysshow",
+    callback = function(value)
+        -- Включаем/выключаем систему отображения имен
+        SetNameDisplay(value, Library.Flags["name_display_actual_mode"])
+    end
+}):Popup({size = 150}):Dropdown({
+    name = "Display Mode",
+    values = {"Display Name", "Original Name", "No Name"},
+    value = "Display Name",
+    flag = "name_display_mode",
+    callback = function(option)
+        -- Определяем режим отображения на основе выбранного значения
+        if option == "Display Name" then
+            o.common_vars.mode = "display"
+        elseif option == "Original Name" then
+            o.common_vars.mode = "original"
+        elseif option == "No Name" then
+            o.common_vars.mode = "none"
+        end
+        
+        -- Обновляем режим отображения имен, если система включена
+        if Library.Flags["player_alwaysshow"] then
+            SetNameDisplay(true, o.common_vars.mode)
+        end
+    end
+})
+
 -- Конфигурации
 ConfigSection = ConfigTab:Section({name = "Configurations", description = ">_<"})
 ConfigFolder = "BrandNew/Games/Universal/Configs"
@@ -43,18 +651,18 @@ end
 
 -- Функция получения файлов конфигурации
 function GetConfigFiles()
-    files = {}
+    o.common_vars.files = {}
     
     if isfolder(ConfigFolder) then
         for _, file in ipairs(listfiles(ConfigFolder)) do
             if file:sub(-4) == ".cfg" then
-                configName = file:match("([^/\\]+)%.cfg$")
-                table.insert(files, configName)
+                o.common_vars.configName = file:match("([^/\\]+)%.cfg$")
+                table.insert(o.common_vars.files, o.common_vars.configName)
             end
         end
     end
     
-    return files
+    return o.common_vars.files
 end
 
 -- Поле ввода имени конфига
@@ -74,13 +682,13 @@ ConfigList = ConfigSection:List({
 ConfigSection:Button({
     name = "SaveConfig", description = ">_<",
     callback = function()
-        ConfigName = Library.Flags["config_name"]
-        if not ConfigName or ConfigName == "" then ConfigName = "default" end
+        o.common_vars.configName = Library.Flags["config_name"]
+        if not o.common_vars.configName or o.common_vars.configName == "" then o.common_vars.configName = "default" end
         
         if not isfolder(ConfigFolder) then makefolder(ConfigFolder) end
-        path = ConfigFolder.."/"..ConfigName..".cfg"
-        writefile(path, Library:GetConfig())
-        Library.Notification({Name = "Configs", Description = "Configuration '"..ConfigName.."' has been saved."})
+        o.common_vars.path = ConfigFolder.."/"..o.common_vars.configName..".cfg"
+        writefile(o.common_vars.path, Library:GetConfig())
+        Library.Notification({Name = "Configs", Description = "Configuration '"..o.common_vars.configName.."' has been saved."})
         ConfigList.Refresh(GetConfigFiles())
     end
 })
@@ -89,16 +697,16 @@ ConfigSection:Button({
 ConfigSection:Button({
     name = "LoadConfig", description = ">_<",
     callback = function()
-        ConfigName = Library.Flags["config_list"]
-        if not ConfigName or ConfigName == "" then
+        o.common_vars.configName = Library.Flags["config_list"]
+        if not o.common_vars.configName or o.common_vars.configName == "" then
             Library.Notification({Name = "Configs", Description = "No config selected"})
             return
         end
         
-        path = ConfigFolder.."/"..ConfigName..".cfg"
-        if isfile(path) then
-            Library.LoadConfig(readfile(path))
-            Library.Notification({Name = "Configs", Description = "Configuration '"..ConfigName.."' has been loaded."})
+        o.common_vars.path = ConfigFolder.."/"..o.common_vars.configName..".cfg"
+        if isfile(o.common_vars.path) then
+            Library.LoadConfig(readfile(o.common_vars.path))
+            Library.Notification({Name = "Configs", Description = "Configuration '"..o.common_vars.configName.."' has been loaded."})
         else
             Library.Notification({Name = "Configs", Description = "Config file not found"})
             ConfigList.Refresh(GetConfigFiles())
@@ -110,16 +718,16 @@ ConfigSection:Button({
 ConfigSection:Button({
     name = "DeleteConfig", description = ">_<",
     callback = function()
-        ConfigName = Library.Flags["config_list"]
-        if not ConfigName or ConfigName == "" then
+        o.common_vars.configName = Library.Flags["config_list"]
+        if not o.common_vars.configName or o.common_vars.configName == "" then
             Library.Notification({Name = "Configs", Description = "No config selected"})
             return
         end
         
-        path = ConfigFolder.."/"..ConfigName..".cfg"
-        if isfile(path) then
-            delfile(path)
-            Library.Notification({Name = "Configs", Description = "Configuration '"..ConfigName.."' has been deleted."})
+        o.common_vars.path = ConfigFolder.."/"..o.common_vars.configName..".cfg"
+        if isfile(o.common_vars.path) then
+            delfile(o.common_vars.path)
+            Library.Notification({Name = "Configs", Description = "Configuration '"..o.common_vars.configName.."' has been deleted."})
             ConfigList.Refresh(GetConfigFiles())
         else
             Library.Notification({Name = "Configs", Description = "Config file not found"})
@@ -143,24 +751,24 @@ ExtraSection = ConfigTab:Section({name = "Extra", description = ">_<", side = "r
 -- Привязка меню к клавише
 ExtraSection:Keybind({
     name = "MenuKeybind", 
-    key = Enum.KeyCode.RightControl, 
-    mode = "Toggle", 
+    key = Enum.KeyCode.RightControl,
+    mode = "Toggle",
     callback = function() Window.Open() end
 })
 
 -- Глобальные переменные для ватермарки
-watermarkEnabled = false
-watermarkGui = nil
-watermarkFrame = nil
-watermarkStrokeColor = Color3.fromRGB(0, 81, 255) -- Цвет по умолчанию
+o.watermarkEnabled = false
+o.watermarkGui = nil
+o.watermarkFrame = nil
+o.watermarkStrokeColor = Color3.fromRGB(0, 81, 255) -- Цвет по умолчанию
 
 -- Функция создания/обновления ватермарки
 function CreateWatermark(enabled)
     -- Удаляем старый ватермарк, если он существует
-    if watermarkGui then
-        watermarkGui:Destroy()
-        watermarkGui = nil
-        watermarkFrame = nil
+    if o.watermarkGui then
+        o.watermarkGui:Destroy()
+        o.watermarkGui = nil
+        o.watermarkFrame = nil
     end
     
     -- Если ватермарк отключен, просто выходим
@@ -168,82 +776,74 @@ function CreateWatermark(enabled)
         return
     end
     
-    -- Получаем необходимые сервисы
-    local Players = game:GetService("Players")
-    local TweenService = game:GetService("TweenService")
-    local UserInputService = game:GetService("UserInputService")
-    
-    local player = Players.LocalPlayer
-    local playerGui = player:WaitForChild("PlayerGui")
-    
     -- Создаем ScreenGui
-    watermarkGui = Instance.new("ScreenGui")
-    watermarkGui.Name = "BrandNewWatermark"
-    watermarkGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    watermarkGui.Parent = playerGui
+    o.watermarkGui = Instance.new("ScreenGui")
+    o.watermarkGui.Name = "BrandNewWatermark"
+    o.watermarkGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    o.watermarkGui.Parent = o.lp:WaitForChild("PlayerGui")
     
     -- Создаем элементы UI
-    watermarkFrame = Instance.new("Frame")
-    local UICorner = Instance.new("UICorner")
-    local Text = Instance.new("TextLabel")
-    local TopStroke = Instance.new("Frame")
+    o.watermarkFrame = Instance.new("Frame")
+    o.watermarkUICorner = Instance.new("UICorner")
+    o.watermarkText = Instance.new("TextLabel")
+    o.watermarkTopStroke = Instance.new("Frame")
     
-    watermarkFrame.Name = "WaterMark"
-    watermarkFrame.Parent = watermarkGui
-    watermarkFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
-    watermarkFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    watermarkFrame.BorderSizePixel = 0
-    watermarkFrame.Position = UDim2.new(0.09700948, 0, 0.107579462, 0)
-    watermarkFrame.Size = UDim2.new(0, 300, 0, 25)
+    o.watermarkFrame.Name = "WaterMark"
+    o.watermarkFrame.Parent = o.watermarkGui
+    o.watermarkFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
+    o.watermarkFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    o.watermarkFrame.BorderSizePixel = 0
+    o.watermarkFrame.Position = UDim2.new(0.09700948, 0, 0.107579462, 0)
+    o.watermarkFrame.Size = UDim2.new(0, 300, 0, 25)
     
-    UICorner.CornerRadius = UDim.new(0, 3)
-    UICorner.Parent = watermarkFrame
+    o.watermarkUICorner.CornerRadius = UDim.new(0, 3)
+    o.watermarkUICorner.Parent = o.watermarkFrame
     
-    Text.Name = "Text"
-    Text.Parent = watermarkFrame
-    Text.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Text.BackgroundTransparency = 1.000
-    Text.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    Text.BorderSizePixel = 0
-    Text.Position = UDim2.new(0.0333333351, 0, 0.11, 0)
-    Text.Size = UDim2.new(0, 280, 1, 0)
-    Text.Font = Enum.Font.Sarpanch
-    Text.Text = "BrandNew | skidded | " .. player.Name .. " | " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
-    Text.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Text.TextSize = 12
-    Text.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    Text.TextStrokeTransparency = 0.64
-    Text.TextXAlignment = Enum.TextXAlignment.Left
-    Text.TextYAlignment = Enum.TextYAlignment.Center
+    o.watermarkText.Name = "Text"
+    o.watermarkText.Parent = o.watermarkFrame
+    o.watermarkText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    o.watermarkText.BackgroundTransparency = 1.000
+    o.watermarkText.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    o.watermarkText.BorderSizePixel = 0
+    o.watermarkText.Position = UDim2.new(0.0333333351, 0, 0.11, 0)
+    o.watermarkText.Size = UDim2.new(0, 280, 1, 0)
+    o.watermarkText.Font = Enum.Font.Sarpanch
+    o.watermarkText.Text = "BrandNew | skidded | " .. o.lp.Name .. " | " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+    o.watermarkText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    o.watermarkText.TextSize = 12
+    o.watermarkText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    o.watermarkText.TextStrokeTransparency = 0.64
+    o.watermarkText.TextXAlignment = Enum.TextXAlignment.Left
+    o.watermarkText.TextYAlignment = Enum.TextYAlignment.Center
     
-    TopStroke.Name = "TopStroke"
-    TopStroke.Parent = watermarkFrame
-    TopStroke.BackgroundColor3 = watermarkStrokeColor -- Используем глобальную переменную для цвета
-    TopStroke.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    TopStroke.BorderSizePixel = 0
-    TopStroke.Size = UDim2.new(0, 300, 0, 1)
+    o.watermarkTopStroke.Name = "TopStroke"
+    o.watermarkTopStroke.Parent = o.watermarkFrame
+    o.watermarkTopStroke.BackgroundColor3 = o.watermarkStrokeColor -- Используем глобальную переменную для цвета
+    o.watermarkTopStroke.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    o.watermarkTopStroke.BorderSizePixel = 0
+    o.watermarkTopStroke.Size = UDim2.new(0, 300, 0, 1)
     
     -- Добавляем UIStroke к TopStroke
-    local TopStrokeUIStroke = Instance.new("UIStroke")
-    TopStrokeUIStroke.Parent = TopStroke
-    TopStrokeUIStroke.Color = Color3.fromRGB(0, 0, 0)
-    TopStrokeUIStroke.Thickness = 1
-    TopStrokeUIStroke.LineJoinMode = Enum.LineJoinMode.Miter
+    o.watermarkStrokeUIStroke = Instance.new("UIStroke")
+    o.watermarkStrokeUIStroke.Parent = o.watermarkTopStroke
+    o.watermarkStrokeUIStroke.Color = Color3.fromRGB(0, 0, 0)
+    o.watermarkStrokeUIStroke.Thickness = 1
+    o.watermarkStrokeUIStroke.LineJoinMode = Enum.LineJoinMode.Miter
     
     -- Функция для обновления размера WaterMark в зависимости от текста
-    local function updateWatermarkSize()
-        local textSize = Text.TextBounds.X
+    function updateWatermarkSize()
+        local textSize = o.watermarkText.TextBounds.X
         local newWidth = textSize + 40
         
         local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        local tween = TweenService:Create(watermarkFrame, tweenInfo, {Size = UDim2.new(0, newWidth, 0, 25)})
+        local tween = o.ts:Create(o.watermarkFrame, tweenInfo, {Size = UDim2.new(0, newWidth, 0, 25)})
         tween:Play()
         
-        local strokeTween = TweenService:Create(TopStroke, tweenInfo, {Size = UDim2.new(0, newWidth, 0, 1)})
+        local strokeTween = o.ts:Create(o.watermarkTopStroke, tweenInfo, {Size = UDim2.new(0, newWidth, 0, 1)})
         strokeTween:Play()
     end
     
-    Text:GetPropertyChangedSignal("Text"):Connect(updateWatermarkSize)
+    o.watermarkText:GetPropertyChangedSignal("Text"):Connect(updateWatermarkSize)
     updateWatermarkSize()
     
     -- Drag and drop функционал
@@ -252,20 +852,20 @@ function CreateWatermark(enabled)
     local dragStart
     local startPos
     
-    local function update(input)
+    local function updateDrag(input)
         local delta = input.Position - dragStart
         local newPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         
         local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        local tween = TweenService:Create(watermarkFrame, tweenInfo, {Position = newPosition})
+        local tween = o.ts:Create(o.watermarkFrame, tweenInfo, {Position = newPosition})
         tween:Play()
     end
     
-    watermarkFrame.InputBegan:Connect(function(input)
+    o.watermarkFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
-            startPos = watermarkFrame.Position
+            startPos = o.watermarkFrame.Position
             
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
@@ -275,36 +875,29 @@ function CreateWatermark(enabled)
         end
     end)
     
-    watermarkFrame.InputChanged:Connect(function(input)
+    o.watermarkFrame.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
     
-    UserInputService.InputChanged:Connect(function(input)
+    o.uis.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
-            update(input)
+            updateDrag(input)
         end
     end)
 end
 
--- Тогл ватермарки с привязанным попапом
-local WatermarkToggle = ExtraSection:Toggle({
+-- Тогл ватермарки с привязанным попапом и колорпикером
+ExtraSection:Toggle({
     name = "Watermark", 
-    description = ">_<",
     default = false,
     flag = "watermark_enabled",
     callback = function(value)
-        watermarkEnabled = value
-        CreateWatermark(watermarkEnabled)
+        o.watermarkEnabled = value
+        CreateWatermark(o.watermarkEnabled)
     end
-})
-
--- Создаем попап для настроек ватермарки
-local WatermarkPopup = WatermarkToggle:Popup({size = 150})
-
--- Колорпикер для изменения цвета верхней линии ватермарки в попапе
-WatermarkPopup:Colorpicker({
+}):Popup({size = 150}):Colorpicker({
     name = "Watermark Color",
     description = ">_<",
     default = Color3.fromRGB(0, 81, 255),
@@ -312,14 +905,14 @@ WatermarkPopup:Colorpicker({
     callback = function(color)
         -- Проверяем тип переданного значения
         if type(color) == "table" and color.c then
-            watermarkStrokeColor = color.c
+            o.watermarkStrokeColor = color.c
         else
-            watermarkStrokeColor = color
+            o.watermarkStrokeColor = color
         end
         
         -- Обновляем цвет, если ватермарка активна
-        if watermarkEnabled and watermarkFrame and watermarkFrame:FindFirstChild("TopStroke") then
-            watermarkFrame.TopStroke.BackgroundColor3 = watermarkStrokeColor
+        if o.watermarkEnabled and o.watermarkFrame and o.watermarkFrame:FindFirstChild("TopStroke") then
+            o.watermarkFrame.TopStroke.BackgroundColor3 = o.watermarkStrokeColor
         end
     end
 })
