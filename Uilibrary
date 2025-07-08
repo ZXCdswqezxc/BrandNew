@@ -2350,6 +2350,9 @@ local Env = getgenv()
 
                 if visibility then
                     Objects.Outline.Visible = true
+                else
+                    -- Close all dropdowns when popup is closed
+                    Library.CloseAllDropdowns()
                 end
 
                 local ParentObjects = Objects.Outline:GetDescendants()
@@ -3989,6 +3992,16 @@ local Env = getgenv()
 
                 if Dropdown.Visible then
                     Popup.Outline.Visible = true
+                    -- Add to global dropdowns list when opened
+                    table.insert(Library.Dropdowns, Dropdown)
+                else
+                    -- Remove from global dropdowns list when closed
+                    for i, dropdown in ipairs(Library.Dropdowns) do
+                        if dropdown == Dropdown then
+                            table.remove(Library.Dropdowns, i)
+                            break
+                        end
+                    end
                 end
 
                 local ParentObjects = Popup.Outline:GetDescendants()
@@ -4420,9 +4433,11 @@ local Env = getgenv()
         function Library.Textbox(self, cfg)
             cfg = cfg or { }; cfg = Library.Config(cfg, {
                 name = "New Textbox",
+                description = nil,
                 value = "",
-                callback = function() end,
+                placeholder = "",
                 flag = nil,
+                callback = function() end,
             })
 
             if not cfg.flag then
@@ -4430,26 +4445,135 @@ local Env = getgenv()
             end
 
             local Textbox = {
+                Objects = { },
+
                 ZIndex = self.ZIndex,
 
-                Objects = { },
+                Value = cfg.value,
             }
 
             local ZIndex = Textbox.ZIndex
 
             local Objects = Textbox.Objects; do
-                Objects.Outline = Utility.New("TextButton", {
-                    Name = "Outline",
+                Objects.Holder = Utility.New("Frame", {
+                    Name = "Holder",
                     Size = UDim2.new(1, 0, 0, 0),
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
                     AutomaticSize = Enum.AutomaticSize.Y,
                     BorderSizePixel = 0,
                     Parent = self.Holder,
-                    TextSize = 0,
-                    Text = "",
-                    AutoButtonColor = false,
-                    Style = Enum.ButtonStyle.Custom,
                     ZIndex = ZIndex,
-                    ClipsDescendants = true,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Parent = Objects.Holder,
+                    Padding = UDim.new(0, 5),
+                })
+
+                ZIndex += 1
+
+                Objects.Line = Utility.New("TextButton", {
+                    Name = "Line",
+                    Size = UDim2.new(1, 0, 0, 0),
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    AutoButtonColor = false,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Style = Enum.ButtonStyle.Custom,
+                    Text = "",
+                    Parent = Objects.Holder,
+                    ZIndex = ZIndex,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Parent = Objects.Line,
+                    Padding = UDim.new(0, 2),
+                })
+
+                ZIndex += 1
+
+                Objects.Text = Utility.New("TextLabel", {
+                    Name = "Text",
+                    TextStrokeTransparency = 0.8,
+                    BackgroundTransparency = 1,
+                    TextSize = Library.FontSize,
+                    FontFace = Library.Font,
+                    Size = UDim2.new(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Text = cfg.name,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = Objects.Line,
+                    ZIndex = ZIndex,
+                }, { TextColor3 = "Dark Text" })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                    Parent = Objects.Text,
+                    Padding = UDim.new(0, 2),
+                })
+
+                ZIndex += 1
+
+                Objects.SideHolder = Utility.New("Frame", {
+                    Name = "SideHolder",
+                    Size = UDim2.new(0, 0, 1, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Parent = Objects.Text,
+                    ZIndex = ZIndex,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                    Parent = Objects.SideHolder,
+                    Padding = UDim.new(0, 2),
+                }) 
+
+                Textbox.SideHolder = Objects.SideHolder
+
+                ZIndex += 1
+
+                if cfg.description then
+                    Objects.Description = Utility.New("TextLabel", {
+                        Name = "Description",
+                        TextStrokeTransparency = 0.8,
+                        BackgroundTransparency = 1,
+                        TextSize = Library.FontSize - 2,
+                        FontFace = Library.Font,
+                        Size = UDim2.new(1, 0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        Text = cfg.description,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = Objects.Line,
+                        ZIndex = ZIndex,
+                        TextWrapped = true,
+                    }, { TextColor3 = "Light Text" })
+
+                    ZIndex += 1
+                end
+
+                Objects.Outline = Utility.New("Frame", {
+                    Name = "Outline",
+                    Size = UDim2.new(1, 0, 0, 20),
+                    Position = UDim2.fromOffset(0, 0),
+                    BorderSizePixel = 0,
+                    Parent = Objects.Holder,
+                    ZIndex = ZIndex,
                 }, { BackgroundColor3 = "Inline" })
 
                 Utility.New("UICorner", {
@@ -4475,46 +4599,37 @@ local Env = getgenv()
                     Parent = Objects.Background,
                 })
 
-                Utility.New("UIPadding", {
-                    Name = "UIPadding",
-                    PaddingTop = UDim.new(0, 2),
-                    PaddingBottom = UDim.new(0, 5), 
-                    PaddingLeft = UDim.new(0, 5),
-                    PaddingRight = UDim.new(0, 5),
-                    Parent = Objects.Background,
-                })
-
                 ZIndex += 1
 
-                Objects.TextBox = Utility.New("TextBox", {
-                    Name = "TextBox",
-                    Size = UDim2.new(1, 0, 0, 0),
-                    Text = cfg.value,
-                    ClearTextOnFocus = false,
-                    PlaceholderText = cfg.name,
-                    ClipsDescendants = true,
-                    MultiLine = false,
+                Objects.Input = Utility.New("TextBox", {
+                    Name = "Input",
+                    TextStrokeTransparency = 0.8,
+                    BackgroundTransparency = 1,
                     TextSize = Library.FontSize,
                     FontFace = Library.Font,
-                    TextXAlignment = Enum.TextXAlignment.Center,
-                    BackgroundTransparency = 1,
-                    TextStrokeTransparency = 0.8,
+                    Size = UDim2.new(1, -10, 1, 0),
+                    Position = UDim2.fromOffset(5, 0),
+                    Text = cfg.value,
+                    PlaceholderText = cfg.placeholder,
+                    TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Objects.Background,
                     ZIndex = ZIndex,
+                    ClearTextOnFocus = false,
                 }, { TextColor3 = "Text", PlaceholderColor3 = "Dark Text" })
-
-                Objects.TextBox.Size = UDim2.new(1, 0, 0, Objects.TextBox.TextBounds.Y - 2)
             end; Textbox.ZIndex = ZIndex
 
             function Textbox.Set(value)
-                Objects.TextBox.Text = value
+                Textbox.Value = value
+
+                Objects.Input.Text = value
+
+                cfg.callback(value)
 
                 Library.Flags[cfg.flag] = value
-                cfg.callback(value)
             end
 
-            Utility.Signal(Objects.TextBox.FocusLost:Connect(function()
-                Textbox.Set(Objects.TextBox.Text)
+            Utility.Signal(Objects.Input.FocusLost:Connect(function(enterPressed)
+                Textbox.Set(Objects.Input.Text)
             end))
 
             Textbox.Set(cfg.value)
@@ -6155,6 +6270,16 @@ local Env = getgenv()
         Bin:add(function()
             Library.Unload()
         end)
+
+        -- Add this function to close all active dropdowns
+        function Library.CloseAllDropdowns()
+            for i = #Library.Dropdowns, 1, -1 do
+                local dropdown = Library.Dropdowns[i]
+                if dropdown and dropdown.Open and type(dropdown.Open) == "function" then
+                    dropdown.Open()
+                end
+            end
+        end
 
     end; Env.Library = Library
 --  
