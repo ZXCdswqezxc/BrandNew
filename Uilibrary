@@ -4855,7 +4855,7 @@ local Env = getgenv()
                 if Type == "EnumItem" then
                     Keybind.Key = value 
 
-                    value = ( value == Enum.KeyCode.Unknown and "..." or value.Name )
+                    value = ( value == Enum.KeyCode.Unknown and "None" or value.Name )
 
                     Popup.Key.Text = Library.KeyConverters[ value:lower() ] or value
                     
@@ -4991,8 +4991,13 @@ local Env = getgenv()
                         return
                     end
 
-                    if input.UserInputType == Enum.UserInputType.Keyboard or table.find({ Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3 }, input.UserInputType ) then 
-                        local Key = input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode or input.UserInputType or Enum.KeyCode.Unknown
+                    -- Игнорируем MouseButton1 при установке кейбинда
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        return
+                    end
+
+                    if input.UserInputType == Enum.UserInputType.Keyboard or table.find({ Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3 }, input.UserInputType ) then 
+                        local Key = input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode or input.UserInputType
                         
                         Keybind.Set( Key )
 
