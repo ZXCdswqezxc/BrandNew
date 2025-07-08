@@ -3548,8 +3548,15 @@ local Env = getgenv()
                 end))
 
                 Utility.Signal(UserInputService.InputBegan:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 and Dropdown.Visible and not Utility.MouseOver(Popup.Outline, input) then
-                        Dropdown.Display()  -- Changed from Dropdown.Open() to Dropdown.Display()
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 and Dropdown.Visible then
+                        if not Utility.MouseOver(Popup.Outline, input) then
+                            -- Close dropdown safely
+                            if Dropdown and type(Dropdown) == "table" then
+                                if Dropdown.Display and type(Dropdown.Display) == "function" then
+                                    Dropdown.Display()
+                                end
+                            end
+                        end
                     end
                 end))
             --
@@ -3768,7 +3775,7 @@ local Env = getgenv()
             end
 
             function Dropdown.Refresh(tbl)
-                for _,item in Dropdown.Items do
+                for _,item in pairs(Dropdown.Items) do
                     item.Objects.Text:Destroy()
                 end
 
@@ -3776,7 +3783,7 @@ local Env = getgenv()
 
                 Dropdown.Value = cfg.multi and { } or nil
 
-                for _,item in tbl do
+                for _,item in pairs(tbl) do
                     Dropdown.Add(item)
                 end
 
@@ -5001,7 +5008,7 @@ local Env = getgenv()
             end
 
             function List.Refresh(tbl)
-                for _,item in List.Items do
+                for _,item in pairs(List.Items) do
                     item.Objects.Text:Destroy()
                 end
 
@@ -5009,7 +5016,7 @@ local Env = getgenv()
 
                 List.Value = cfg.multi and { } or nil
 
-                for _,item in tbl do
+                for _,item in pairs(tbl) do
                     List.Add(item)
                 end
             end
@@ -5587,11 +5594,18 @@ local Env = getgenv()
 
         -- Config Manager System
         function Library.CreateConfigManager(tab, options)
+            if not tab or type(tab) ~= "table" then
+                return nil
+            end
+            
             options = options or {}
             local side = options.side or "left"
             local sectionName = options.name or "Config Manager"
             local sectionDesc = options.description or "Save and load your configurations"
             local folderPath = options.folderPath or (Folder.."/Games/"..(Game and Game.Name or "Universal").."/Configs")
+            
+            -- Use tab's ZIndex if available
+            local ZIndex = (tab.ZIndex or 0) + 1
             
             if not isfolder(folderPath) then
                 makefolder(folderPath)
@@ -5643,18 +5657,25 @@ local Env = getgenv()
             
             -- Function to refresh the dropdown
             local function RefreshConfigList()
-                local configs = GetConfigList()
-                configListDropdown:Refresh(configs)
-                if #configs > 0 and configs[1] ~= "No configs found" then
-                    Library.Flags["ui_selected_config"] = configs[1]
-                    if configListDropdown.Display then
-                        configListDropdown.Display(configs[1])
+                if configListDropdown and type(configListDropdown) == "table" then
+                    local configs = GetConfigList()
+                    if configListDropdown.Refresh and type(configListDropdown.Refresh) == "function" then
+                        configListDropdown:Refresh(configs)
                     end
-                else
-                    Library.Flags["ui_selected_config"] = "No configs found"
-                    if configListDropdown.Display then
-                        configListDropdown.Display("No configs found")
+                    
+                    -- Update the flag
+                    if #configs > 0 and configs[1] ~= "No configs found" then
+                        Library.Flags["ui_selected_config"] = configs[1]
+                    else
+                        Library.Flags["ui_selected_config"] = "No configs found"
                     end
+                    
+                    -- Try to update display if available
+                    pcall(function()
+                        if Library.Flags["ui_selected_config"] and configListDropdown.Update then
+                            configListDropdown:Update(Library.Flags["ui_selected_config"])
+                        end
+                    end)
                 end
             end
             
