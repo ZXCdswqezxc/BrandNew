@@ -206,6 +206,40 @@ local o = {
         character_removing = function(player) return player.CharacterRemoving end,
         touched = function(part) return part.Touched end,
         touching_ended = function(part) return part.TouchEnded end
+    },
+    
+    -- Commonly used variables to reduce local declarations
+    common_vars = {
+        -- Character parts
+        char = nil,
+        hrp = nil,
+        hum = nil,
+        head = nil,
+        
+        -- UI elements
+        status = nil,
+        speed = nil,
+        
+        -- Movement variables
+        baseSpeed = nil,
+        verticalSpeed = nil,
+        velocity = nil,
+        moveDir = nil,
+        camCF = nil,
+        move = nil,
+        newPos = nil,
+        
+        -- Flags and states
+        hasBillboard = false,
+        mode = nil,
+        
+        -- File operations
+        configName = nil,
+        path = nil,
+        files = {},
+        
+        -- Connections
+        tempConn = nil
     }
 }
 
@@ -222,6 +256,36 @@ function o.conns:RemoveAll()
         if conn then conn:Disconnect() end
     end
     table.clear(self)
+end
+
+-- Helper functions for common variable access
+function o.getChar()
+    o.common_vars.char = o.lp.Character
+    return o.common_vars.char
+end
+
+function o.getHrp()
+    o.common_vars.char = o.lp.Character
+    if o.common_vars.char then
+        o.common_vars.hrp = o.common_vars.char:FindFirstChild(o.r15.root)
+    end
+    return o.common_vars.hrp
+end
+
+function o.getHum()
+    o.common_vars.char = o.lp.Character
+    if o.common_vars.char then
+        o.common_vars.hum = o.common_vars.char:FindFirstChild("Humanoid")
+    end
+    return o.common_vars.hum
+end
+
+function o.getHead()
+    o.common_vars.char = o.lp.Character
+    if o.common_vars.char then
+        o.common_vars.head = o.common_vars.char:FindFirstChild("Head")
+    end
+    return o.common_vars.head
 end
 
 -- Helper Functions
