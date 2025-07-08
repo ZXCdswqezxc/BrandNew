@@ -3239,6 +3239,371 @@ local Env = getgenv()
             return setmetatable(Button, Library)
         end
 
+        function Library.List(self, cfg)
+            cfg = cfg or { }; cfg = Library.Config(cfg, {
+                name = "New List",
+                description = nil,
+                value = "value1",
+                values = { "value1", "value2", "value3", "value4", "value5", "value6" },
+                multi = false,
+                size = 100,
+                callback = function() end,
+                flag = nil,
+            })
+
+            if not cfg.flag then
+                cfg.flag = cfg.name
+            end
+
+            local List = {
+                ZIndex = self.ZIndex,
+
+                Objects = { },
+
+                Popup = { },
+
+                Items = { },
+
+                Value = nil,
+            }
+
+            local ZIndex = List.ZIndex
+
+            local Objects = List.Objects; do
+                Objects.Holder = Utility.New("Frame", {
+                    Name = "Holder",
+                    Size = UDim2.new(1, 0, 0, 0),
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderSizePixel = 0,
+                    Parent = self.Holder,
+                    ZIndex = ZIndex,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Parent = Objects.Holder,
+                    Padding = UDim.new(0, 5),
+                })
+
+                ZIndex += 1
+
+                Objects.Line = Utility.New("TextButton", {
+                    Name = "Line",
+                    Size = UDim2.new(1, 0, 0, 0),
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    AutoButtonColor = false,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Style = Enum.ButtonStyle.Custom,
+                    Text = "",
+                    Parent = Objects.Holder,
+                    ZIndex = ZIndex,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Parent = Objects.Line,
+                    Padding = UDim.new(0, 2),
+                })
+
+                ZIndex += 1
+
+                Objects.Text = Utility.New("TextLabel", {
+                    Name = "Text",
+                    TextStrokeTransparency = 0.8,
+                    BackgroundTransparency = 1,
+                    TextSize = Library.FontSize,
+                    FontFace = Library.Font,
+                    Size = UDim2.new(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Text = cfg.name,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = Objects.Line,
+                    ZIndex = ZIndex,
+                }, { TextColor3 = "Dark Text" })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                    Parent = Objects.Text,
+                    Padding = UDim.new(0, 2),
+                })
+
+                ZIndex += 1
+
+                Objects.SideHolder = Utility.New("Frame", {
+                    Name = "SideHolder",
+                    Size = UDim2.new(0, 0, 1, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Parent = Objects.Text,
+                    ZIndex = ZIndex,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                    Parent = Objects.SideHolder,
+                    Padding = UDim.new(0, 2),
+                }) 
+
+                List.SideHolder = Objects.SideHolder
+
+                ZIndex += 1
+
+                if cfg.description then
+                    Objects.Description = Utility.New("TextLabel", {
+                        Name = "Description",
+                        TextStrokeTransparency = 0.8,
+                        BackgroundTransparency = 1,
+                        TextSize = Library.FontSize - 2,
+                        FontFace = Library.Font,
+                        Size = UDim2.new(1, 0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        Text = cfg.description,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = Objects.Line,
+                        ZIndex = ZIndex,
+                        TextWrapped = true,
+                    }, { TextColor3 = "Light Text" })
+
+                    ZIndex += 1
+                end
+
+                Objects.Outline = Utility.New("TextButton", {
+                    Name = "Outline",
+                    Size = UDim2.new(1, 0, 0, cfg.size),
+                    Position = UDim2.fromOffset(0, 0),
+                    BorderSizePixel = 0,
+                    AutoButtonColor = false,
+                    Style = Enum.ButtonStyle.Custom,
+                    Text = "",
+                    Parent = Objects.Holder,
+                    ZIndex = ZIndex,
+                }, { BackgroundColor3 = "Inline" })
+
+                Utility.New("UICorner", {
+                    Name = "UICorner",
+                    CornerRadius = UDim.new(0, 5),
+                    Parent = Objects.Outline,
+                })
+
+                ZIndex += 1
+
+                Objects.Background = Utility.New("Frame", {
+                    Name = "Background",
+                    Size = UDim2.new(1, -2, 1, -2),
+                    Position = UDim2.fromOffset(1, 1),
+                    BorderSizePixel = 0,
+                    Parent = Objects.Outline,
+                    ZIndex = ZIndex,
+                    ClipsDescendants = true,
+                }, { BackgroundColor3 = "Background" })
+
+                Utility.New("UICorner", {
+                    Name = "UICorner",
+                    CornerRadius = UDim.new(0, 5),
+                    Parent = Objects.Background,
+                })
+
+                Utility.New("UIPadding", {
+                    Name = "UIPadding",
+                    PaddingLeft = UDim.new(0, 5),
+                    PaddingRight = UDim.new(0, 5),
+                    PaddingTop = UDim.new(0, 5),
+                    PaddingBottom = UDim.new(0, 5),
+                    Parent = Objects.Background
+                })
+
+                ZIndex += 1
+
+                Objects.Scrolling = Utility.New("ScrollingFrame", {
+                    Name = "Scrolling",
+                    Size = UDim2.new(1, 0, 1, 0),
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Parent = Objects.Background,
+                    ZIndex = ZIndex,
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    CanvasSize = UDim2.new(0, 0, 0, 0),
+                    BottomImage = Library.ScrollBar,
+                    MidImage = Library.ScrollBar,
+                    TopImage = Library.ScrollBar,
+                    ScrollBarThickness = 2,
+                }, { ScrollBarImageColor3 = "Accent" })
+
+                ZIndex += 1
+
+                Objects.Content = Utility.New("Frame", {
+                    Name = "Content",
+                    Size = UDim2.new(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Parent = Objects.Scrolling,
+                    ZIndex = ZIndex,
+                })
+                
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                    Parent = Objects.Content,
+                    Padding = UDim.new(0, 5),
+                })
+
+                ZIndex += 1
+
+            end; List.ZIndex = ZIndex
+
+            function List.Set(value)
+                if cfg.multi then
+                    if type(value) == "table" then -- probably means config/values is loading...
+                        for _,item in List.Items do
+                            item.Select(false)
+                        end
+
+                        for _,item in value do
+                            for _,item2 in List.Items do
+                                if item2.Name == item then
+                                    item2.Select(true)
+                                end
+                            end
+                        end
+
+                        List.Value = value
+
+                        cfg.callback(List.Value)
+
+                        Library.Flags[cfg.flag] = List.Value
+                    else
+                        local Index = table.find(List.Value, value)
+
+                        if Index then
+                            table.remove(List.Value, Index)
+
+                            for _,item in List.Items do
+                                if item.Name == value then
+                                    item.Select(false)
+                                end
+                            end
+
+                            cfg.callback(List.Value)
+
+                            Library.Flags[cfg.flag] = List.Value
+                        else
+                            table.insert(List.Value, value)
+
+                            for _,item in List.Items do
+                                if item.Name == value then
+                                    item.Select(true)
+                                end
+                            end
+
+                            cfg.callback(List.Value)
+
+                            Library.Flags[cfg.flag] = List.Value
+                        end
+                    end
+                else
+                    for _,item in List.Items do
+                        item.Select(item.Name == value)
+                    end
+
+                    List.Value = value
+
+                    cfg.callback(List.Value)
+
+                    Library.Flags[cfg.flag] = List.Value
+                end
+            end
+
+            function List.Add(name)
+                local Item = {
+                    Objects = {},
+
+                    Name = name,
+
+                    Selected = false,
+                }
+
+                local Objs = Item.Objects; do
+                    Objs.Text = Utility.New("TextButton", {
+                        Name = "Text",
+                        TextStrokeTransparency = 0.8,
+                        BackgroundTransparency = 1,
+                        TextSize = Library.FontSize,
+                        FontFace = Library.Font,
+                        Size = UDim2.new(1, 0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        Text = name,
+                        AutoButtonColor = false,
+                        Style = Enum.ButtonStyle.Custom,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = Objects.Content,
+                        ZIndex = ZIndex,
+                    }, { TextColor3 = "Dark Text" })
+                end
+
+                function Item.Select(value)
+                    Library.ChangeObjectTheme(Objs.Text, {
+                        TextColor3 = value and "Text" or "Dark Text",
+                    }, true)
+
+                    Item.Selected = value
+                end
+
+                Utility.Signal(Objs.Text.MouseButton1Click:Connect(function()
+                    List.Set(name)
+                end))
+
+                table.insert(List.Items, Item)
+
+                return Item
+            end
+
+            function List.Refresh(tbl)
+                for _,item in List.Items do
+                    item.Objects.Text:Destroy()
+                end
+
+                List.Items = { }
+
+                List.Value = cfg.multi and { } or nil
+
+                for _,item in tbl do
+                    if type(item) == "string" then
+                        List.Add(item)
+                    end
+                end
+            end
+
+            for _,item in cfg.values do
+                List.Add(item)
+            end
+
+            List.Set(cfg.value)
+
+            Library.ConfigFlags[cfg.flag] = List.Set
+
+            return setmetatable(List, Library)
+        end
+        
         function Library.Dropdown(self, cfg)
             cfg = cfg or {}; cfg = Library.Config(cfg, {
                 name = "New Dropdown",
