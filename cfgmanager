@@ -67,17 +67,12 @@ function ConfigManager.Init(Library, tab, options)
     local function RefreshConfigList()
         local configs = GetConfigList()
         if ConfigDropdown and ConfigDropdown.Refresh then
-            -- Use pcall to catch any errors during refresh
-            local success, error = pcall(function()
-                ConfigDropdown:Refresh(configs)
-            end)
+            -- Make sure we're always passing a table of strings, not booleans
+            ConfigDropdown:Refresh(configs)
             
-            if not success then
-                -- Fallback method if refresh fails
-                if ConfigDropdown and ConfigDropdown.Objects and ConfigDropdown.Objects.Value then
-                    ConfigDropdown.Objects.Value.Text = configs[1] or "No configs found"
-                end
-                print("Config refresh error:", error)
+            -- Reset the selected config if the list changes
+            if #configs > 0 then
+                Library.Flags["cm_selected_config"] = configs[1]
             end
         end
     end
@@ -100,6 +95,7 @@ function ConfigManager.Init(Library, tab, options)
             writefile(path, Library.GetConfig())
             Library.Notification({ name = "Config Saved", description = "Configuration '"..configName.."' has been saved." })
             
+            -- Refresh the config list after saving
             RefreshConfigList()
         end
     })
@@ -122,6 +118,7 @@ function ConfigManager.Init(Library, tab, options)
                 Library.Notification({ name = "Config Loaded", description = "Configuration '"..configName.."' has been loaded." })
             else
                 Library.Notification({ name = "Error", description = "Config file not found" })
+                RefreshConfigList() -- Refresh if file not found
             end
         end
     })
@@ -141,9 +138,12 @@ function ConfigManager.Init(Library, tab, options)
             if isfile(path) then
                 delfile(path)
                 Library.Notification({ name = "Config Deleted", description = "Configuration '"..configName.."' has been deleted." })
+                
+                -- Always refresh after deletion
                 RefreshConfigList()
             else
                 Library.Notification({ name = "Error", description = "Config file not found" })
+                RefreshConfigList() -- Refresh if file not found
             end
         end
     })
