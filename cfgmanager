@@ -37,9 +37,6 @@ function ConfigManager.Init(Library, tab, options)
             end
         end
         
-        if #configs == 0 then
-            return {"No configs found"}
-        end
         return configs
     end
     
@@ -50,30 +47,87 @@ function ConfigManager.Init(Library, tab, options)
         flag = "cm_config_name"
     })
     
-    -- Config list dropdown
-    local ConfigDropdown = ConfigSection:Dropdown({
-        name = "Saved Configs",
-        description = "Select a saved configuration",
-        values = GetConfigList(),
-        callback = function(value)
-            if value ~= "No configs found" then
-                Library.Flags["cm_config_name"] = value
-            end
-        end,
-        flag = "cm_selected_config"
+    -- Selected Config Label
+    ConfigSection:Label({
+        name = "Selected: None",
+        flag = "cm_selected_label"
     })
+    
+    -- List of configs
+    local configList = GetConfigList()
+    local selectedConfig = nil
+    
+    -- Config list section
+    local ConfigListSection = tab:Section({
+        name = "Saved Configs",
+        description = "Click to select a configuration",
+        side = side
+    })
+    
+    local configButtons = {}
     
     -- Function to refresh config list
     local function RefreshConfigList()
-        local configs = GetConfigList()
-        if ConfigDropdown and ConfigDropdown.Refresh then
-            -- Make sure we're always passing a table of strings, not booleans
-            ConfigDropdown:Refresh(configs)
-            
-            -- Reset the selected config if the list changes
-            if #configs > 0 then
-                Library.Flags["cm_selected_config"] = configs[1]
+        -- Clear existing buttons
+        for _, button in pairs(configButtons) do
+            if button and button.Objects and button.Objects.Holder then
+                button.Objects.Holder:Destroy()
             end
+        end
+        
+        configButtons = {}
+        selectedConfig = nil
+        
+        -- Update label
+        if Library.SetValue then
+            Library.SetValue("cm_selected_label", "Selected: None")
+        end
+        
+        -- Get updated list of configs
+        local configs = GetConfigList()
+        
+        -- Create new buttons
+        if #configs > 0 then
+            for _, configName in ipairs(configs) do
+                local newButton = ConfigListSection:Button({
+                    name = configName,
+                    description = "Click to select",
+                    callback = function(self)
+                        selectedConfig = configName
+                        Library.Flags["cm_config_name"] = configName
+                        
+                        -- Update button colors
+                        for _, btn in pairs(configButtons) do
+                            if btn and btn.Objects and btn.Objects.Text then
+                                Library.ChangeObjectTheme(btn.Objects.Text, {
+                                    TextColor3 = "Dark Text"
+                                })
+                            end
+                        end
+                        
+                        -- Highlight selected button
+                        if self and self.Objects and self.Objects.Text then
+                            Library.ChangeObjectTheme(self.Objects.Text, {
+                                TextColor3 = "Accent"
+                            })
+                        end
+                        
+                        -- Update label
+                        if Library.SetValue then
+                            Library.SetValue("cm_selected_label", "Selected: " .. configName)
+                        end
+                        
+                        Library.Notification({ name = "Config Selected", description = "'" .. configName .. "' selected." })
+                    end
+                })
+                
+                table.insert(configButtons, newButton)
+            end
+        else
+            ConfigListSection:Label({
+                name = "No configs found",
+                description = "Save a config first"
+            })
         end
     end
     
@@ -83,7 +137,7 @@ function ConfigManager.Init(Library, tab, options)
         description = "Save current settings",
         callback = function()
             local configName = Library.Flags["cm_config_name"]
-            if not configName or configName == "" or configName == "No configs found" then
+            if not configName or configName == "" then
                 configName = "default"
             end
             
@@ -105,20 +159,19 @@ function ConfigManager.Init(Library, tab, options)
         name = "Load Config",
         description = "Load selected configuration",
         callback = function()
-            local configName = Library.Flags["cm_selected_config"]
-            if not configName or configName == "No configs found" then
+            if not selectedConfig then
                 Library.Notification({ name = "Error", description = "No config selected" })
                 return
             end
             
-            local path = folderPath.."/"..configName..".json"
+            local path = folderPath.."/"..selectedConfig..".json"
             if isfile(path) then
                 local data = readfile(path)
                 Library.LoadConfig(data)
-                Library.Notification({ name = "Config Loaded", description = "Configuration '"..configName.."' has been loaded." })
+                Library.Notification({ name = "Config Loaded", description = "Configuration '"..selectedConfig.."' has been loaded." })
             else
                 Library.Notification({ name = "Error", description = "Config file not found" })
-                RefreshConfigList() -- Refresh if file not found
+                RefreshConfigList()
             end
         end
     })
@@ -128,22 +181,26 @@ function ConfigManager.Init(Library, tab, options)
         name = "Delete Config",
         description = "Delete selected configuration",
         callback = function()
-            local configName = Library.Flags["cm_selected_config"]
-            if not configName or configName == "No configs found" then
+            if not selectedConfig then
                 Library.Notification({ name = "Error", description = "No config selected" })
                 return
             end
             
-            local path = folderPath.."/"..configName..".json"
+            local path = folderPath.."/"..selectedConfig..".json"
             if isfile(path) then
                 delfile(path)
-                Library.Notification({ name = "Config Deleted", description = "Configuration '"..configName.."' has been deleted." })
+                Library.Notification({ name = "Config Deleted", description = "Configuration '"..selectedConfig.."' has been deleted." })
+                selectedConfig = nil
                 
-                -- Always refresh after deletion
+                -- Update label
+                if Library.SetValue then
+                    Library.SetValue("cm_selected_label", "Selected: None")
+                end
+                
                 RefreshConfigList()
             else
                 Library.Notification({ name = "Error", description = "Config file not found" })
-                RefreshConfigList() -- Refresh if file not found
+                RefreshConfigList()
             end
         end
     })
@@ -158,9 +215,13 @@ function ConfigManager.Init(Library, tab, options)
         end
     })
     
+    -- Initialize the config list
+    RefreshConfigList()
+    
     -- Return the config manager object
     return {
         Section = ConfigSection,
+        ListSection = ConfigListSection,
         RefreshList = RefreshConfigList,
         GetConfigList = GetConfigList
     }
