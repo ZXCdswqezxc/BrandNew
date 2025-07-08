@@ -465,6 +465,8 @@ local Env = getgenv()
             tab = "TAB",
             capslock = "CAP",
             leftshift = "LSH",
+            unknown = "None",
+            none = "None",
             mousebutton1 = "MB1",
             mousebutton2 = "MB2",
             mousebutton3 = "MB3",
@@ -4977,10 +4979,17 @@ local Env = getgenv()
                 
                 task.wait( 1/50 )
 
+                -- Устанавливаем флаг, что мы в режиме прослушивания кейбинда
+                local isListening = true
+                
                 Keybind.Listener = Utility.Signal(UserInputService.InputBegan:Connect(function(input) 
+                    -- Если мы уже не в режиме прослушивания, выходим
+                    if not isListening then return end
+                    
                     if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace then 
                         Keybind.Set( Enum.KeyCode.Unknown )
-
+                        isListening = false
+                        
                         Keybind.Listener:Disconnect( )
                         Keybind.Listener = nil
                             
@@ -4991,13 +5000,20 @@ local Env = getgenv()
                         return
                     end
 
-                    -- Игнорируем MouseButton1 при установке кейбинда
+                    -- Игнорируем MouseButton1 при установке кейбинда, т.к. это тот клик, которым мы активировали режим прослушивания
                     if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        -- Создаем отдельный таймер для отключения прослушивания MouseButton1
+                        task.delay(0.1, function()
+                            if isListening and Keybind.Listener then
+                                isListening = false
+                            end
+                        end)
                         return
                     end
 
                     if input.UserInputType == Enum.UserInputType.Keyboard or table.find({ Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3 }, input.UserInputType ) then 
                         local Key = input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode or input.UserInputType
+                        isListening = false
                         
                         Keybind.Set( Key )
 
@@ -5005,8 +5021,10 @@ local Env = getgenv()
                             TextColor3 = "Dark Text",
                         }, true)
 
-                        Keybind.Listener:Disconnect( )
-                        Keybind.Listener = nil
+                        if Keybind.Listener then
+                            Keybind.Listener:Disconnect( )
+                            Keybind.Listener = nil
+                        end
                     end
                 end))
             end))
@@ -5047,7 +5065,9 @@ local Env = getgenv()
                 Keybind.Open()
             end))
 
-            Keybind.Set({ cfg.key, cfg.mode, cfg.value }, true)
+            -- Всегда начинаем с Unknown, если не указан явно другой ключ
+            local initialKey = cfg.key == Enum.KeyCode.E and Enum.KeyCode.Unknown or cfg.key
+            Keybind.Set({ initialKey, cfg.mode, cfg.value }, true)
 
             -- Library.ConfigFlags[cfg.flag] = Keybind.Set
             Library.ConfigFlags[string.format("%s_data", cfg.flag)] = Keybind.Set
