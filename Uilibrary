@@ -1191,7 +1191,9 @@ local Env = getgenv()
                     )     
                 end
 
-                Popup.SetFunc(color, alpha)
+                if Popup.SetFunc and type(Popup.SetFunc) == "function" then
+                    Popup.SetFunc(color, alpha)
+                end
 
                 Objects.HuePicker.BackgroundColor3 = Color3.fromHSV(Popup.HuePos, 1, 1)
                 Objects.SaturationPicker.BackgroundColor3 = color
@@ -1531,8 +1533,11 @@ local Env = getgenv()
                     end
                 end
 
-                if Library.ColorpickerWindow.Visible then
-                    Library.ColorpickerWindow.Open()
+                -- Safely check ColorpickerWindow
+                if Library.ColorpickerWindow and type(Library.ColorpickerWindow) == "table" and Library.ColorpickerWindow.Visible then
+                    if Library.ColorpickerWindow.Open and type(Library.ColorpickerWindow.Open) == "function" then
+                        Library.ColorpickerWindow.Open()
+                    end
                 end
 
                 Window.Tweening = true
@@ -2428,7 +2433,7 @@ local Env = getgenv()
             Popup.BoundObjects = {
                 Objects.Icon,
                 Popup.Objects.Outline,
-                Library.ColorpickerWindow.Objects.Outline,
+                (Library.ColorpickerWindow and type(Library.ColorpickerWindow) == "table" and Library.ColorpickerWindow.Objects and Library.ColorpickerWindow.Objects.Outline) or nil,
             }
 
             function Cog.InsideBounds(input)
@@ -3544,7 +3549,7 @@ local Env = getgenv()
 
                 Utility.Signal(UserInputService.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 and Dropdown.Visible and not Utility.MouseOver(Popup.Outline, input) then
-                        Dropdown.Open()
+                        Dropdown.Display()  -- Changed from Dropdown.Open() to Dropdown.Display()
                     end
                 end))
             --
@@ -5641,9 +5646,15 @@ local Env = getgenv()
                 local configs = GetConfigList()
                 configListDropdown:Refresh(configs)
                 if #configs > 0 and configs[1] ~= "No configs found" then
-                    configListDropdown:Set(configs[1])
+                    Library.Flags["ui_selected_config"] = configs[1]
+                    if configListDropdown.Display then
+                        configListDropdown.Display(configs[1])
+                    end
                 else
-                    configListDropdown:Set("No configs found")
+                    Library.Flags["ui_selected_config"] = "No configs found"
+                    if configListDropdown.Display then
+                        configListDropdown.Display("No configs found")
+                    end
                 end
             end
             
