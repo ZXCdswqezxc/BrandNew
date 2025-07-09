@@ -2778,3 +2778,136 @@ if game.PlaceId == 2788229376 then
         end
     })
 end
+
+-- Создаем секцию Extra во вкладке Misc (справа)
+ExtraSection = MiscTab:Section({name = "Extra", description = ">_<", side = "right"})
+
+-- Добавляем тогл No Recoil
+ExtraSection:Toggle({
+    name = "No Recoil",
+    default = false,
+    flag = "misc_norecoil",
+    callback = function(value)
+        if value then
+            -- Сохраняем оригинальный хук, если он еще не сохранен
+            if not o.originalRecoilHook then
+                o.originalRecoilHook = hookmetamethod(game, "__newindex", function(self, index, value)
+                    local callingScr = getcallingscript()
+                    
+                    -- Функция проверки Framework
+                    local function isframework(scriptInstance)
+                        if tostring(scriptInstance) == "Framework" then
+                            return true
+                        end
+                        return false
+                    end
+                    
+                    -- Функция проверки аргументов
+                    local function checkArgs(instance, idx)
+                        if tostring(instance):lower():find("camera") and tostring(idx) == "CFrame" then
+                            return true
+                        end
+                        return false
+                    end
+                    
+                    -- Если включен No Recoil и вызов от Framework для изменения CFrame камеры, блокируем
+                    if Library.Flags["misc_norecoil"] and isframework(callingScr) and checkArgs(self, index) then
+                        return
+                    end
+                    
+                    -- Иначе пропускаем вызов
+                    return o.originalRecoilHook(self, index, value)
+                end)
+            end
+        end
+    end
+})
+
+-- Добавляем тогл Unlock Camera Distance
+ExtraSection:Toggle({
+    name = "Unlock Camera Distance",
+    default = false,
+    flag = "misc_unlockcamera",
+    callback = function(value)
+        if value then
+            -- Устанавливаем максимальное расстояние камеры на бесконечность
+            o.lp.CameraMaxZoomDistance = math.huge
+            
+            -- Сохраняем соединение для обновления при изменении настроек
+            if not o.cameraDistanceConnection then
+                o.cameraDistanceConnection = o.rs.Heartbeat:Connect(function()
+                    if Library.Flags["misc_unlockcamera"] then
+                        if o.lp.CameraMaxZoomDistance ~= math.huge then
+                            o.lp.CameraMaxZoomDistance = math.huge
+                        end
+                    end
+                end)
+            end
+        else
+            -- Возвращаем стандартное значение при выключении
+            o.lp.CameraMaxZoomDistance = 128 -- Стандартное значение в большинстве игр
+            
+            -- Отключаем соединение
+            if o.cameraDistanceConnection then
+                o.cameraDistanceConnection:Disconnect()
+                o.cameraDistanceConnection = nil
+            end
+        end
+    end
+})
+
+-- Добавляем тогл FOV Changer с попапом
+o.FovChangerToggle = ExtraSection:Toggle({
+    name = "FOV Changer",
+    default = false,
+    flag = "misc_fovchanger",
+    callback = function(value)
+        -- Сохраняем оригинальное FOV при первом включении
+        if not o.originalFov and value then
+            o.originalFov = o.camera.FieldOfView
+        end
+        
+        if value then
+            -- Устанавливаем новое FOV
+            o.camera.FieldOfView = Library.Flags["misc_fov_value"] or 70
+            
+            -- Создаем соединение для обновления FOV
+            if not o.fovChangerConnection then
+                o.fovChangerConnection = o.rs.RenderStepped:Connect(function()
+                    if Library.Flags["misc_fovchanger"] and o.camera.FieldOfView ~= Library.Flags["misc_fov_value"] then
+                        o.camera.FieldOfView = Library.Flags["misc_fov_value"] or 70
+                    end
+                end)
+            end
+        else
+            -- Возвращаем оригинальное FOV при выключении
+            if o.originalFov then
+                o.camera.FieldOfView = o.originalFov
+            end
+            
+            -- Отключаем соединение
+            if o.fovChangerConnection then
+                o.fovChangerConnection:Disconnect()
+                o.fovChangerConnection = nil
+            end
+        end
+    end
+})
+
+-- Создаем попап для FOV Changer
+o.FovChangerPopup = o.FovChangerToggle:Popup({size = 150})
+
+-- Добавляем слайдер для значения FOV
+o.FovChangerPopup:Slider({
+    name = "FOV Value",
+    min = 70,
+    max = 120,
+    default = 90,
+    float = 1,
+    flag = "misc_fov_value",
+    callback = function(value)
+        if Library.Flags["misc_fovchanger"] then
+            o.camera.FieldOfView = value
+        end
+    end
+})
