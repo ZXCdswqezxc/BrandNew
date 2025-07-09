@@ -231,22 +231,26 @@ o.VisualizeVelocityToggle = PlayerMainSection:Toggle({
     flag = "player_visualizevel",
     callback = function(value)
         -- Инициализируем объекты для визуализации, если их еще нет
-        if not o.velocityVisualizer then
-            -- Создаем папку для хранения визуализатора
-            o.velocityVisualizer = Instance.new("Folder")
-            o.velocityVisualizer.Name = "VelocityVisualizer"
-            o.velocityVisualizer.Parent = workspace
+        if not o.velocityDrawings then
+            o.velocityDrawings = {
+                line = Drawing.new("Line"),
+                circle = Drawing.new("Circle")
+            }
             
-            -- Создаем линию для визуализации скорости
-            o.velocityPart = Instance.new("Part")
-            o.velocityPart.Name = "VelocityLine"
-            o.velocityPart.Size = Vector3.new(0.05, 1, 1) -- Толщина всегда 1
-            o.velocityPart.Anchored = true
-            o.velocityPart.CanCollide = false
-            o.velocityPart.Material = Enum.Material.Neon
-            o.velocityPart.Color = Color3.fromRGB(255, 0, 0)
-            o.velocityPart.Transparency = 0.3
-            o.velocityPart.Parent = o.velocityVisualizer
+            -- Настраиваем линию
+            o.velocityDrawings.line.Thickness = 1
+            o.velocityDrawings.line.Color = Color3.fromRGB(255, 0, 0)
+            o.velocityDrawings.line.Transparency = 1
+            o.velocityDrawings.line.ZIndex = 1
+            
+            -- Настраиваем круг для конечной точки
+            o.velocityDrawings.circle.Thickness = 1
+            o.velocityDrawings.circle.Color = Color3.fromRGB(255, 0, 0)
+            o.velocityDrawings.circle.Transparency = 1
+            o.velocityDrawings.circle.NumSides = 12
+            o.velocityDrawings.circle.Radius = 3
+            o.velocityDrawings.circle.Filled = true
+            o.velocityDrawings.circle.ZIndex = 2
         end
         
         if value then
@@ -254,29 +258,41 @@ o.VisualizeVelocityToggle = PlayerMainSection:Toggle({
             if not o.visualizeVelConnection then
                 o.visualizeVelConnection = o.rs.RenderStepped:Connect(function()
                     o.common_vars.char = o.lp.Character
-                    if not o.common_vars.char then return end
+                    if not o.common_vars.char then 
+                        o.velocityDrawings.line.Visible = false
+                        o.velocityDrawings.circle.Visible = false
+                        return 
+                    end
                     
                     o.common_vars.hrp = o.common_vars.char:FindFirstChild("HumanoidRootPart")
-                    if not o.common_vars.hrp then return end
+                    if not o.common_vars.hrp then 
+                        o.velocityDrawings.line.Visible = false
+                        o.velocityDrawings.circle.Visible = false
+                        return 
+                    end
                     
                     -- Получаем текущую скорость
                     o.common_vars.vel = o.common_vars.hrp.Velocity
                     
                     -- Если скорость слишком мала, делаем линию невидимой
                     if o.common_vars.vel.Magnitude < 0.1 then
-                        o.velocityPart.Transparency = 1
+                        o.velocityDrawings.line.Visible = false
+                        o.velocityDrawings.circle.Visible = false
                         return
                     end
                     
-                    -- Устанавливаем прозрачность линии
-                    o.velocityPart.Transparency = 0.3
+                    -- Устанавливаем прозрачность линии и круга
+                    o.velocityDrawings.line.Transparency = 0.7
+                    o.velocityDrawings.circle.Transparency = 0.7
                     
-                    -- Устанавливаем цвет линии
+                    -- Устанавливаем цвет линии и круга
                     if Library.Flags["visualizevel_color"] then
                         if type(Library.Flags["visualizevel_color"]) == "table" and Library.Flags["visualizevel_color"].c then
-                            o.velocityPart.Color = Library.Flags["visualizevel_color"].c
+                            o.velocityDrawings.line.Color = Library.Flags["visualizevel_color"].c
+                            o.velocityDrawings.circle.Color = Library.Flags["visualizevel_color"].c
                         else
-                            o.velocityPart.Color = Library.Flags["visualizevel_color"]
+                            o.velocityDrawings.line.Color = Library.Flags["visualizevel_color"]
+                            o.velocityDrawings.circle.Color = Library.Flags["visualizevel_color"]
                         end
                     end
                     
@@ -284,19 +300,30 @@ o.VisualizeVelocityToggle = PlayerMainSection:Toggle({
                     o.common_vars.scale = Library.Flags["visualizevel_scale"] or 0.1
                     o.common_vars.scaledVel = o.common_vars.vel * o.common_vars.scale
                     
-                    -- Устанавливаем размер линии пропорционально скорости (толщина всегда 1)
-                    o.velocityPart.Size = Vector3.new(0.05, 1, o.common_vars.scaledVel.Magnitude)
+                    -- Получаем позиции для начала и конца линии
+                    o.common_vars.startPos = o.common_vars.hrp.Position
+                    o.common_vars.endPos = o.common_vars.startPos + o.common_vars.scaledVel
                     
-                    -- Устанавливаем позицию и ориентацию линии
-                    o.velocityPart.CFrame = CFrame.new(
-                        o.common_vars.hrp.Position,
-                        o.common_vars.hrp.Position + o.common_vars.scaledVel
-                    ) * CFrame.new(0, 0, -o.common_vars.scaledVel.Magnitude/2)
+                    -- Конвертируем 3D позиции в 2D для отображения на экране
+                    o.common_vars.startPos2D = o.camera:WorldToViewportPoint(o.common_vars.startPos)
+                    o.common_vars.endPos2D = o.camera:WorldToViewportPoint(o.common_vars.endPos)
+                    
+                    -- Проверяем, что обе точки видны на экране
+                    if o.common_vars.startPos2D.Z > 0 and o.common_vars.endPos2D.Z > 0 then
+                        -- Устанавливаем позиции линии
+                        o.velocityDrawings.line.From = Vector2.new(o.common_vars.startPos2D.X, o.common_vars.startPos2D.Y)
+                        o.velocityDrawings.line.To = Vector2.new(o.common_vars.endPos2D.X, o.common_vars.endPos2D.Y)
+                        o.velocityDrawings.line.Visible = true
+                        
+                        -- Устанавливаем позицию круга
+                        o.velocityDrawings.circle.Position = Vector2.new(o.common_vars.endPos2D.X, o.common_vars.endPos2D.Y)
+                        o.velocityDrawings.circle.Visible = true
+                    else
+                        o.velocityDrawings.line.Visible = false
+                        o.velocityDrawings.circle.Visible = false
+                    end
                 end)
             end
-            
-            -- Показываем визуализатор
-            o.velocityVisualizer.Parent = workspace
         else
             -- Отключаем соединение и скрываем визуализатор
             if o.visualizeVelConnection then
@@ -305,13 +332,15 @@ o.VisualizeVelocityToggle = PlayerMainSection:Toggle({
             end
             
             -- Скрываем визуализатор
-            o.velocityVisualizer.Parent = nil
+            if o.velocityDrawings then
+                o.velocityDrawings.line.Visible = false
+                o.velocityDrawings.circle.Visible = false
+            end
         end
     end
 })
 
 -- Создаем попап для Prediction Visualizer
--- (убираем слайдер толщины, оставляем только колорпикер и scale)
 o.VisualizeVelocityPopup = o.VisualizeVelocityToggle:Popup({size = 150})
 
 -- Добавляем колорпикер для цвета линии
@@ -321,22 +350,25 @@ o.VisualizeVelocityPopup:Colorpicker({
     default = Color3.fromRGB(255, 0, 0),
     flag = "visualizevel_color",
     callback = function(color)
-        if o.velocityPart then
+        if o.velocityDrawings then
             if type(color) == "table" and color.c then
-                o.velocityPart.Color = color.c
+                o.velocityDrawings.line.Color = color.c
+                o.velocityDrawings.circle.Color = color.c
             else
-                o.velocityPart.Color = color
+                o.velocityDrawings.line.Color = color
+                o.velocityDrawings.circle.Color = color
             end
         end
     end
 })
 
--- Добавляем слайдер для масштаба линии (оставляем только scale)
+-- Добавляем слайдер для масштаба линии
 o.VisualizeVelocityPopup:Slider({
     name = "Scale",
     min = 0.01,
     max = 1,
     default = 0.1,
+    float = 0.01,
     flag = "visualizevel_scale",
     callback = function(value)
         Library.Flags["visualizevel_scale"] = value
@@ -2275,8 +2307,52 @@ o.autoBuy = {
     placeItems = {
         [2788229376] = {"[LMG] - $4098", "[Rifle] - $1694", "[AUG] - $2131"},
         [71189885129233] = {"[AK47]"}
-    }
+    },
+    buyAmmo = false,
+    ammoList = {
+        "200 [LMG Ammo] - $328",
+        "5 [Rifle Ammo] - $273",
+        "90 [AUG Ammo] - $87"
+    },
+    selectedAmmo = {},
+    ammoAttempts = 0,
+    maxAmmoAttempts = 5,
+    lastGunBought = false
 }
+
+-- Функция покупки патронов
+o.autoBuy.buyAmmoItem = function(ammoName)
+    -- Сохраняем оригинальную позицию, если еще не сохранили
+    if not o.autoBuy.originalPosition and o.lp.Character and o.lp.Character:FindFirstChild("HumanoidRootPart") then
+        o.autoBuy.originalPosition = o.lp.Character.HumanoidRootPart.CFrame
+    end
+
+    -- Находит нужные патроны в магазине и "кликает" по ним
+    if o.autoBuy.shopFolder then
+        for _, item in pairs(o.autoBuy.shopFolder:GetChildren()) do
+            if item.Name == ammoName then
+                o.common_vars.itemHead = item:FindFirstChild("Head")
+                if o.common_vars.itemHead then
+                    -- Телепортируемся к предмету
+                    o.lp.Character.HumanoidRootPart.CFrame = o.common_vars.itemHead.CFrame + Vector3.new(0, 3.2, 0)
+                    
+                    -- Ждем немного для загрузки окружения
+                    task.wait(0.3)
+                    
+                    o.common_vars.clickdetector = item:FindFirstChild("ClickDetector")
+                    if o.common_vars.clickdetector then
+                        o.common_vars.clickdetector.MaxActivationDistance = 9e9
+                        fireclickdetector(o.common_vars.clickdetector)
+                        task.wait(0.5)
+                        return true
+                    end
+                end
+                break
+            end
+        end
+    end
+    return false
+end
 
 -- Инициализация списка предметов в зависимости от placeId
 o.autoBuy.initializeItems = function()
@@ -2381,6 +2457,18 @@ o.autoBuy.buyItem = function(itemName)
                         
                         -- Проверяем, появился ли предмет
                         if o.autoBuy.hasItem(itemName) then
+                            -- Если оружие куплено успешно, сбрасываем счетчик попыток покупки патронов
+                            o.autoBuy.lastGunBought = true
+                            o.autoBuy.ammoAttempts = 0
+                            
+                            -- Если включена автопокупка патронов, покупаем их
+                            if o.autoBuy.buyAmmo and #o.autoBuy.selectedAmmo > 0 then
+                                -- Покупаем каждый выбранный тип патронов
+                                for _, ammoName in ipairs(o.autoBuy.selectedAmmo) do
+                                    o.autoBuy.buyAmmoItem(ammoName)
+                                end
+                            end
+                            
                             return true
                         end
                         
@@ -2388,7 +2476,23 @@ o.autoBuy.buyItem = function(itemName)
                         fireclickdetector(o.common_vars.clickdetector)
                         task.wait(1)
                         
-                        return o.autoBuy.hasItem(itemName)
+                        local success = o.autoBuy.hasItem(itemName)
+                        
+                        -- Если оружие куплено успешно, сбрасываем счетчик попыток покупки патронов
+                        if success then
+                            o.autoBuy.lastGunBought = true
+                            o.autoBuy.ammoAttempts = 0
+                            
+                            -- Если включена автопокупка патронов, покупаем их
+                            if o.autoBuy.buyAmmo and #o.autoBuy.selectedAmmo > 0 then
+                                -- Покупаем каждый выбранный тип патронов
+                                for _, ammoName in ipairs(o.autoBuy.selectedAmmo) do
+                                    o.autoBuy.buyAmmoItem(ammoName)
+                                end
+                            end
+                        end
+                        
+                        return success
                     end
                 end
                 break
@@ -2451,6 +2555,32 @@ o.autoBuy.connection = o.rs.Heartbeat:Connect(function()
         task.wait(0.5)
         o.autoBuy.isBuying = false
     else
+        -- Если все предметы уже есть, проверяем нужно ли купить патроны
+        if o.autoBuy.buyAmmo and #o.autoBuy.selectedAmmo > 0 and o.autoBuy.ammoAttempts < o.autoBuy.maxAmmoAttempts then
+            -- Покупаем патроны только если недавно было куплено оружие
+            if o.autoBuy.lastGunBought then
+                o.autoBuy.isBuying = true
+                
+                -- Покупаем каждый выбранный тип патронов
+                for _, ammoName in ipairs(o.autoBuy.selectedAmmo) do
+                    o.autoBuy.buyAmmoItem(ammoName)
+                end
+                
+                -- Увеличиваем счетчик попыток
+                o.autoBuy.ammoAttempts = o.autoBuy.ammoAttempts + 1
+                
+                -- Если достигли максимального числа попыток, сбрасываем флаг покупки оружия
+                if o.autoBuy.ammoAttempts >= o.autoBuy.maxAmmoAttempts then
+                    o.autoBuy.lastGunBought = false
+                end
+                
+                -- Возвращаемся на исходную позицию
+                o.autoBuy.returnToOriginalPosition()
+                
+                o.autoBuy.isBuying = false
+            end
+        end
+        
         -- Если все предметы уже есть, делаем небольшую паузу
         task.wait(1)
         -- Сбрасываем индекс для следующего цикла
@@ -2467,14 +2597,20 @@ o.autoBuy.returnToOriginalPosition = function()
 end
 
 -- UI Toggle for AutoBuy with multi-select
-MiscUtilsSection:Toggle({
+local AutoBuyToggle = MiscUtilsSection:Toggle({
     name = "AutoBuy",
     default = false,
     flag = "misc_autobuy",
     callback = function(v)
         o.autoBuy.enabled = v
     end
-}):Popup({size = 200}):Dropdown({
+})
+
+-- Создаем попап для AutoBuy
+local AutoBuyPopup = AutoBuyToggle:Popup({size = 250})
+
+-- Добавляем выпадающий список для выбора оружия в попап AutoBuy
+AutoBuyPopup:Dropdown({
     name = "Items",
     values = o.autoBuy.itemsList,
     multi = true,
@@ -2484,3 +2620,161 @@ MiscUtilsSection:Toggle({
         o.autoBuy.selectedItems = v
     end
 })
+
+-- Добавляем тогл для включения/выключения автопокупки патронов
+AutoBuyPopup:Toggle({
+    name = "Auto Buy Ammo",
+    default = false,
+    flag = "autobuy_ammo",
+    callback = function(v)
+        o.autoBuy.buyAmmo = v
+    end
+})
+
+-- Добавляем выпадающий список для выбора типов патронов
+AutoBuyPopup:Dropdown({
+    name = "Ammo Types",
+    values = o.autoBuy.ammoList,
+    multi = true,
+    value = {},
+    flag = "autobuy_ammo_types",
+    callback = function(v)
+        o.autoBuy.selectedAmmo = v
+    end
+})
+
+-- Добавляем функционал Multi Guns
+o.multiGuns = {
+    enabled = false,
+    selectedGuns = {},
+    gunsList = {"[LMG] - $4098", "[Rifle] - $1694", "[AUG] - $2131"},
+    isEquipping = false
+}
+
+-- Функция для экипировки выбранного оружия
+o.multiGuns.equipSelectedGuns = function()
+    if o.multiGuns.isEquipping then return end
+    o.multiGuns.isEquipping = true
+    
+    -- Получаем персонажа и рюкзак
+    o.common_vars.char = o.lp.Character
+    o.common_vars.backpack = o.lp.Backpack
+    
+    if not o.common_vars.char or not o.common_vars.backpack then
+        o.multiGuns.isEquipping = false
+        return
+    end
+    
+    -- Экипируем каждое оружие из выбранного списка
+    for _, gunName in ipairs(o.multiGuns.selectedGuns) do
+        -- Ищем оружие в рюкзаке
+        o.common_vars.nameCheck = gunName:match("%[(.-)%]")
+        if not o.common_vars.nameCheck then
+            o.common_vars.nameCheck = gunName -- Используем полное имя, если не удалось извлечь
+        end
+        
+        for _, tool in ipairs(o.common_vars.backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:lower():find(o.common_vars.nameCheck:lower()) then
+                -- Экипируем оружие
+                tool.Parent = o.common_vars.char
+                task.wait(0.2) -- Небольшая задержка между экипировкой
+                
+                -- Пытаемся перезарядить оружие
+                pcall(function()
+                    game:GetService("ReplicatedStorage").MainEvent:FireServer("Reload", tool)
+                end)
+                
+                break
+            end
+        end
+    end
+    
+    o.multiGuns.isEquipping = false
+end
+
+-- Функция для проверки, все ли выбранные оружия экипированы
+o.multiGuns.checkEquippedGuns = function()
+    if not o.multiGuns.enabled or o.multiGuns.isEquipping then return end
+    
+    o.common_vars.char = o.lp.Character
+    if not o.common_vars.char then return end
+    
+    -- Проверяем, все ли выбранные оружия экипированы
+    o.common_vars.missingGuns = false
+    
+    for _, gunName in ipairs(o.multiGuns.selectedGuns) do
+        o.common_vars.nameCheck = gunName:match("%[(.-)%]")
+        if not o.common_vars.nameCheck then
+            o.common_vars.nameCheck = gunName
+        end
+        
+        o.common_vars.foundGun = false
+        for _, tool in ipairs(o.common_vars.char:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:lower():find(o.common_vars.nameCheck:lower()) then
+                o.common_vars.foundGun = true
+                break
+            end
+        end
+        
+        if not o.common_vars.foundGun then
+            o.common_vars.missingGuns = true
+            break
+        end
+    end
+    
+    -- Если какое-то оружие отсутствует, экипируем все заново
+    if o.common_vars.missingGuns then
+        o.multiGuns.equipSelectedGuns()
+    end
+end
+
+-- Обработка события появления персонажа для Multi Guns
+o.multiGuns.characterAddedConnection = o.lp.CharacterAdded:Connect(function(character)
+    if o.multiGuns.enabled and game.PlaceId == 2788229376 then -- Только для первой игры
+        task.wait(0.5) -- Задержка для загрузки GUI
+        o.multiGuns.equipSelectedGuns()
+    end
+end)
+
+-- Создаем цикл проверки экипированного оружия
+if o.multiGuns.checkConnection then
+    o.multiGuns.checkConnection:Disconnect()
+    o.multiGuns.checkConnection = nil
+end
+
+o.multiGuns.checkConnection = o.rs.Heartbeat:Connect(function()
+    if game.PlaceId == 2788229376 and o.multiGuns.enabled then
+        -- Проверяем каждые 2 секунды
+        if not o.multiGuns.lastCheck or tick() - o.multiGuns.lastCheck > 2 then
+            o.multiGuns.lastCheck = tick()
+            o.multiGuns.checkEquippedGuns()
+        end
+    end
+end)
+
+-- Добавляем тогл Multi Guns с попапом (только для первой игры)
+if game.PlaceId == 2788229376 then
+    MiscUtilsSection:Toggle({
+        name = "Multi Guns",
+        default = false,
+        flag = "misc_multiguns",
+        callback = function(v)
+            o.multiGuns.enabled = v
+            if v then
+                o.multiGuns.equipSelectedGuns()
+            end
+        end
+    }):Popup({size = 200}):Dropdown({
+        name = "Guns",
+        values = o.multiGuns.gunsList,
+        multi = true,
+        value = {},
+        flag = "multiguns_items",
+        callback = function(v)
+            o.multiGuns.selectedGuns = v
+            if o.multiGuns.enabled then
+                o.multiGuns.equipSelectedGuns()
+            end
+        end
+    })
+end
