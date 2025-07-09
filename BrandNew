@@ -2911,3 +2911,721 @@ o.FovChangerPopup:Slider({
         end
     end
 })
+
+-- Добавляем тогл Save Walkspeed с попапом
+o.SaveWalkspeedToggle = ExtraSection:Toggle({
+    name = "Save Walkspeed",
+    default = false,
+    flag = "misc_savewalkspeed",
+    callback = function(value)
+        -- Сохраняем оригинальный walkspeed при первом включении
+        if not o.originalWalkspeed and value then
+            o.common_vars.char = o.lp.Character
+            if o.common_vars.char then
+                o.common_vars.humanoid = o.common_vars.char:FindFirstChildOfClass("Humanoid")
+                if o.common_vars.humanoid then
+                    o.originalWalkspeed = o.common_vars.humanoid.WalkSpeed
+                end
+            end
+        end
+        
+        if value then
+            -- Устанавливаем новый walkspeed
+            o.common_vars.walkspeedValue = Library.Flags["misc_walkspeed_value"] or 16
+            
+            -- Создаем соединение для обновления walkspeed
+            if not o.walkspeedConnection then
+                o.walkspeedConnection = o.rs.Heartbeat:Connect(function()
+                    o.common_vars.char = o.lp.Character
+                    if o.common_vars.char then
+                        o.common_vars.humanoid = o.common_vars.char:FindFirstChildOfClass("Humanoid")
+                        if o.common_vars.humanoid and o.common_vars.humanoid.WalkSpeed ~= o.common_vars.walkspeedValue then
+                            o.common_vars.humanoid.WalkSpeed = o.common_vars.walkspeedValue
+                        end
+                    end
+                end)
+            end
+            
+            -- Создаем соединение для нового персонажа
+            if not o.walkspeedCharacterAddedConnection then
+                o.walkspeedCharacterAddedConnection = o.lp.CharacterAdded:Connect(function(character)
+                    task.wait(0.5) -- Небольшая задержка для загрузки персонажа
+                    if Library.Flags["misc_savewalkspeed"] then
+                        o.common_vars.humanoid = character:WaitForChild("Humanoid")
+                        if o.common_vars.humanoid then
+                            o.common_vars.humanoid.WalkSpeed = Library.Flags["misc_walkspeed_value"] or 16
+                        end
+                    end
+                end)
+            end
+        else
+            -- Возвращаем оригинальный walkspeed при выключении
+            if o.originalWalkspeed then
+                o.common_vars.char = o.lp.Character
+                if o.common_vars.char then
+                    o.common_vars.humanoid = o.common_vars.char:FindFirstChildOfClass("Humanoid")
+                    if o.common_vars.humanoid then
+                        o.common_vars.humanoid.WalkSpeed = o.originalWalkspeed
+                    end
+                end
+            end
+            
+            -- Отключаем соединения
+            if o.walkspeedConnection then
+                o.walkspeedConnection:Disconnect()
+                o.walkspeedConnection = nil
+            end
+            
+            if o.walkspeedCharacterAddedConnection then
+                o.walkspeedCharacterAddedConnection:Disconnect()
+                o.walkspeedCharacterAddedConnection = nil
+            end
+        end
+    end
+})
+
+-- Создаем попап для Save Walkspeed
+o.SaveWalkspeedPopup = o.SaveWalkspeedToggle:Popup({size = 150})
+
+-- Добавляем слайдер для значения walkspeed
+o.SaveWalkspeedPopup:Slider({
+    name = "Walkspeed Value",
+    min = 10,
+    max = 30,
+    default = 16,
+    float = 1,
+    flag = "misc_walkspeed_value",
+    callback = function(value)
+        o.common_vars.walkspeedValue = value
+        if Library.Flags["misc_savewalkspeed"] then
+            o.common_vars.char = o.lp.Character
+            if o.common_vars.char then
+                o.common_vars.humanoid = o.common_vars.char:FindFirstChildOfClass("Humanoid")
+                if o.common_vars.humanoid then
+                    o.common_vars.humanoid.WalkSpeed = value
+                end
+            end
+        end
+    end
+})
+
+-- Добавляем тогл Jump Power с попапом
+o.JumpPowerToggle = ExtraSection:Toggle({
+    name = "Jump Power",
+    default = false,
+    flag = "misc_jumppower",
+    callback = function(value)
+        -- Сохраняем оригинальный jumppower при первом включении
+        if not o.originalJumpPower and value then
+            o.common_vars.char = o.lp.Character
+            if o.common_vars.char then
+                o.common_vars.humanoid = o.common_vars.char:FindFirstChildOfClass("Humanoid")
+                if o.common_vars.humanoid then
+                    o.originalJumpPower = o.common_vars.humanoid.JumpPower
+                end
+            end
+        end
+        
+        if value then
+            -- Устанавливаем новый jumppower
+            o.common_vars.jumppowerValue = tonumber(Library.Flags["misc_jumppower_value"]) or 50
+            
+            -- Создаем соединение для обновления jumppower
+            if not o.jumppowerConnection then
+                o.jumppowerConnection = o.rs.Heartbeat:Connect(function()
+                    o.common_vars.char = o.lp.Character
+                    if o.common_vars.char then
+                        o.common_vars.humanoid = o.common_vars.char:FindFirstChildOfClass("Humanoid")
+                        if o.common_vars.humanoid and o.common_vars.humanoid.JumpPower ~= o.common_vars.jumppowerValue then
+                            o.common_vars.humanoid.JumpPower = o.common_vars.jumppowerValue
+                        end
+                    end
+                end)
+            end
+            
+            -- Создаем соединение для нового персонажа
+            if not o.jumppowerCharacterAddedConnection then
+                o.jumppowerCharacterAddedConnection = o.lp.CharacterAdded:Connect(function(character)
+                    task.wait(0.5) -- Небольшая задержка для загрузки персонажа
+                    if Library.Flags["misc_jumppower"] then
+                        o.common_vars.humanoid = character:WaitForChild("Humanoid")
+                        if o.common_vars.humanoid then
+                            o.common_vars.humanoid.JumpPower = tonumber(Library.Flags["misc_jumppower_value"]) or 50
+                        end
+                    end
+                end)
+            end
+        else
+            -- Возвращаем оригинальный jumppower при выключении
+            if o.originalJumpPower then
+                o.common_vars.char = o.lp.Character
+                if o.common_vars.char then
+                    o.common_vars.humanoid = o.common_vars.char:FindFirstChildOfClass("Humanoid")
+                    if o.common_vars.humanoid then
+                        o.common_vars.humanoid.JumpPower = o.originalJumpPower
+                    end
+                end
+            end
+            
+            -- Отключаем соединения
+            if o.jumppowerConnection then
+                o.jumppowerConnection:Disconnect()
+                o.jumppowerConnection = nil
+            end
+            
+            if o.jumppowerCharacterAddedConnection then
+                o.jumppowerCharacterAddedConnection:Disconnect()
+                o.jumppowerCharacterAddedConnection = nil
+            end
+        end
+    end
+})
+
+-- Создаем попап для Jump Power
+o.JumpPowerPopup = o.JumpPowerToggle:Popup({size = 150})
+
+-- Добавляем текстбокс для значения jumppower
+o.JumpPowerPopup:Textbox({
+    name = "Jump Power Value",
+    description = "Enter jump power value",
+    placeholder = "50",
+    default = "50",
+    flag = "misc_jumppower_value",
+    callback = function(text)
+        o.common_vars.value = tonumber(text)
+        if o.common_vars.value then
+            o.common_vars.jumppowerValue = o.common_vars.value
+            if Library.Flags["misc_jumppower"] then
+                o.common_vars.char = o.lp.Character
+                if o.common_vars.char then
+                    o.common_vars.humanoid = o.common_vars.char:FindFirstChildOfClass("Humanoid")
+                    if o.common_vars.humanoid then
+                        o.common_vars.humanoid.JumpPower = o.common_vars.value
+                    end
+                end
+            end
+        end
+    end
+})
+
+-- Добавляем тогл ChatSpy
+ExtraSection:Toggle({
+    name = "ChatSpy",
+    default = false,
+    flag = "misc_chatspy",
+    callback = function(value)
+        if value then
+            -- Запускаем ChatSpy скрипт
+            if not o.chatSpyLoaded then
+                o.chatSpyLoaded = true
+                
+                -- Настройки ChatSpy
+                o.chatSpy = {
+                    enabled = true,
+                    spyOnMyself = true,
+                    public = false,
+                    publicItalics = true,
+                    privateProperties = {
+                        Color = Color3.fromRGB(0, 255, 255),
+                        Font = Enum.Font.SourceSansBold,
+                        TextSize = 18
+                    }
+                }
+                
+                -- Получаем необходимые сервисы
+                local StarterGui = game:GetService("StarterGui")
+                local Players = game:GetService("Players")
+                local player = Players.LocalPlayer
+                local saymsg = game:GetService("ReplicatedStorage"):WaitForChild("DefaultChatSystemChatEvents"):WaitForChild("SayMessageRequest")
+                local getmsg = game:GetService("ReplicatedStorage"):WaitForChild("DefaultChatSystemChatEvents"):WaitForChild("OnMessageDoneFiltering")
+                local instance = (_G.chatSpyInstance or 0) + 1
+                _G.chatSpyInstance = instance
+                
+                -- Функция для обработки сообщений
+                o.chatSpy.onChatted = function(p, msg)
+                    if _G.chatSpyInstance == instance then
+                        if p == player and msg:lower():sub(1, 4) == "/spy" then
+                            o.chatSpy.enabled = not o.chatSpy.enabled
+                            task.wait(0.3)
+                            o.chatSpy.privateProperties.Text = "{SPY "..(o.chatSpy.enabled and "EN" or "DIS").."ABLED}"
+                            StarterGui:SetCore("ChatMakeSystemMessage", o.chatSpy.privateProperties)
+                        elseif o.chatSpy.enabled and (o.chatSpy.spyOnMyself == true or p ~= player) then
+                            msg = msg:gsub("[\n\r]", ''):gsub("\t", ' '):gsub("[ ]+", ' ')
+                            local hidden = true
+                            local conn = getmsg.OnClientEvent:Connect(function(packet, channel)
+                                if packet.SpeakerUserId == p.UserId and packet.Message == msg:sub(#msg - #packet.Message + 1) and (channel == "All" or (channel == "Team" and o.chatSpy.public == false and Players[packet.FromSpeaker].Team == player.Team)) then
+                                    hidden = false
+                                end
+                            end)
+                            task.wait(1)
+                            conn:Disconnect()
+                            if hidden and o.chatSpy.enabled then
+                                if o.chatSpy.public then
+                                    saymsg:FireServer((o.chatSpy.publicItalics and "/me " or '').."{SPY} [".. p.Name .."]: "..msg, "All")
+                                else
+                                    o.chatSpy.privateProperties.Text = "{SPY} [".. p.Name .."]: "..msg
+                                    StarterGui:SetCore("ChatMakeSystemMessage", o.chatSpy.privateProperties)
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                -- Подключаем обработчики событий
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if not o.chatSpyPlayerConnections then o.chatSpyPlayerConnections = {} end
+                    o.chatSpyPlayerConnections[p.Name] = p.Chatted:Connect(function(msg)
+                        o.chatSpy.onChatted(p, msg)
+                    end)
+                end
+                
+                -- Обработчик для новых игроков
+                o.chatSpyPlayerAddedConnection = Players.PlayerAdded:Connect(function(p)
+                    if not o.chatSpyPlayerConnections then o.chatSpyPlayerConnections = {} end
+                    o.chatSpyPlayerConnections[p.Name] = p.Chatted:Connect(function(msg)
+                        o.chatSpy.onChatted(p, msg)
+                    end)
+                end)
+                
+                -- Обработчик для выхода игроков
+                o.chatSpyPlayerRemovingConnection = Players.PlayerRemoving:Connect(function(p)
+                    if o.chatSpyPlayerConnections and o.chatSpyPlayerConnections[p.Name] then
+                        o.chatSpyPlayerConnections[p.Name]:Disconnect()
+                        o.chatSpyPlayerConnections[p.Name] = nil
+                    end
+                end)
+                
+                -- Отправляем сообщение о включении
+                o.chatSpy.privateProperties.Text = "{SPY "..(o.chatSpy.enabled and "EN" or "DIS").."ABLED}"
+                StarterGui:SetCore("ChatMakeSystemMessage", o.chatSpy.privateProperties)
+                
+                -- Настраиваем видимость чата
+                if not player.PlayerGui:FindFirstChild("Chat") then task.wait(3) end
+                local chatFrame = player.PlayerGui.Chat.Frame
+                chatFrame.ChatChannelParentFrame.Visible = true
+                chatFrame.ChatBarParentFrame.Position = chatFrame.ChatChannelParentFrame.Position + UDim2.new(UDim.new(), chatFrame.ChatChannelParentFrame.Size.Y)
+            end
+            
+            -- Включаем ChatSpy
+            o.chatSpy.enabled = true
+            
+            -- Отправляем сообщение о включении
+            game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
+                Text = "{SPY ENABLED}",
+                Color = Color3.fromRGB(0, 255, 255),
+                Font = Enum.Font.SourceSansBold,
+                TextSize = 18
+            })
+        else
+            -- Отключаем ChatSpy
+            if o.chatSpy then
+                o.chatSpy.enabled = false
+                
+                -- Отправляем сообщение о выключении
+                game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
+                    Text = "{SPY DISABLED}",
+                    Color = Color3.fromRGB(0, 255, 255),
+                    Font = Enum.Font.SourceSansBold,
+                    TextSize = 18
+                })
+            end
+        end
+    end
+})
+
+-- Создаем секцию PlayerActions во вкладке Misc (слева)
+PlayerActionsSection = MiscTab:Section({name = "Player Actions", description = ">_<", side = "left"})
+
+-- Функция для обновления списка игроков
+function UpdatePlayerList()
+    o.common_vars.playerNames = {}
+    for _, player in pairs(o.plrs:GetPlayers()) do
+        if player ~= o.lp then
+            table.insert(o.common_vars.playerNames, player.Name)
+        end
+    end
+    return o.common_vars.playerNames
+end
+
+-- Инициализация списка игроков
+o.playerList = UpdatePlayerList()
+o.selectedPlayer = nil
+
+-- Добавляем список игроков
+o.PlayersList = PlayerActionsSection:List({
+    name = "Players",
+    values = o.playerList,
+    value = o.playerList[1],
+    flag = "player_selected",
+    callback = function(value)
+        o.selectedPlayer = o.plrs:FindFirstChild(value)
+    end
+})
+
+-- Функция для обновления списка игроков при входе/выходе
+o.plrs.PlayerAdded:Connect(function(player)
+    if player ~= o.lp then
+        o.playerList = UpdatePlayerList()
+        o.PlayersList.Refresh(o.playerList)
+    end
+end)
+
+o.plrs.PlayerRemoving:Connect(function()
+    o.playerList = UpdatePlayerList()
+    o.PlayersList.Refresh(o.playerList)
+end)
+
+-- Добавляем кнопку View (наблюдение за игроком)
+PlayerActionsSection:Button({
+    name = "View",
+    callback = function()
+        if o.selectedPlayer and o.selectedPlayer.Character then
+            -- Устанавливаем камеру на выбранного игрока
+            o.camera.CameraSubject = o.selectedPlayer.Character:FindFirstChildOfClass("Humanoid")
+            o.isViewing = true
+            
+            -- Создаем соединение для слежения за персонажем игрока
+            if not o.viewConnection then
+                o.viewConnection = o.rs.RenderStepped:Connect(function()
+                    if not o.selectedPlayer or not o.selectedPlayer.Character then
+                        -- Если игрок вышел или персонаж исчез, возвращаем камеру
+                        if o.viewConnection then
+                            o.viewConnection:Disconnect()
+                            o.viewConnection = nil
+                        end
+                        
+                        if o.lp.Character then
+                            o.camera.CameraSubject = o.lp.Character:FindFirstChildOfClass("Humanoid")
+                        end
+                        o.isViewing = false
+                    end
+                end)
+            end
+        end
+    end
+})
+
+-- Добавляем кнопку Stop View (прекращение наблюдения)
+PlayerActionsSection:Button({
+    name = "Stop View",
+    callback = function()
+        -- Отключаем наблюдение и возвращаем камеру
+        if o.viewConnection then
+            o.viewConnection:Disconnect()
+            o.viewConnection = nil
+        end
+        
+        if o.lp.Character then
+            o.camera.CameraSubject = o.lp.Character:FindFirstChildOfClass("Humanoid")
+        end
+        o.isViewing = false
+    end
+})
+
+-- Добавляем кнопку Fling (подбрасывание игрока)
+PlayerActionsSection:Button({
+    name = "Fling",
+    callback = function()
+        if o.selectedPlayer and o.selectedPlayer.Character and o.lp.Character then
+            -- Сохраняем текущую позицию
+            if not getgenv().OldPos then
+                getgenv().OldPos = o.lp.Character.HumanoidRootPart.CFrame
+            end
+            
+            -- Активируем флинг
+            o.isFlingActive = true
+            
+            -- Отключаем NoClip если он активен
+            local noClipWasActive = false
+            if Library.Flags["player_nocollision"] then
+                noClipWasActive = true
+                Library.Flags["player_nocollision"] = false
+                
+                -- Восстанавливаем коллизии для всех частей
+                for _, part in pairs(o.lp.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end
+            
+            -- Сохраняем оригинальные настройки
+            local originalGravity = workspace.Gravity
+            local myHumanoid = o.lp.Character:FindFirstChildOfClass("Humanoid")
+            local originalJumpPower = myHumanoid and myHumanoid.JumpPower or 50
+            local originalWalkSpeed = myHumanoid and myHumanoid.WalkSpeed or 16
+            
+            -- Создаем невидимую часть для контроля
+            local controlPart = Instance.new("Part")
+            controlPart.Name = "FlingControl"
+            controlPart.Anchored = true
+            controlPart.CanCollide = false
+            controlPart.Transparency = 1
+            controlPart.Size = Vector3.new(1, 1, 1)
+            controlPart.Parent = workspace
+            
+            -- Запускаем цикл флинга
+            o.flingConnection = o.rs.Heartbeat:Connect(function()
+                if not o.isFlingActive or not o.selectedPlayer or not o.selectedPlayer.Character or not o.lp.Character then
+                    if o.flingConnection then
+                        o.flingConnection:Disconnect()
+                        o.flingConnection = nil
+                    end
+                    return
+                end
+                
+                local myRoot = o.lp.Character:FindFirstChild("HumanoidRootPart")
+                local targetRoot = o.selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local targetHumanoid = o.selectedPlayer.Character:FindFirstChildOfClass("Humanoid")
+                
+                if not myRoot or not targetRoot or not myHumanoid or not targetHumanoid then
+                    return
+                end
+                
+                -- Проверяем, сидит ли цель
+                if targetHumanoid.Sit then
+                    -- Если цель сидит, пытаемся сбить её с сиденья
+                    local targetSeat = targetHumanoid.SeatPart
+                    if targetSeat then
+                        -- Позиционируем контрольную часть рядом с сиденьем
+                        controlPart.CFrame = targetSeat.CFrame * CFrame.new(0, 3, 0)
+                    end
+                end
+                
+                -- Обновляем позицию контрольной части
+                controlPart.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 0)
+                
+                -- Увеличиваем скорость и прыжок для более эффективного флинга
+                myHumanoid.JumpPower = 70
+                myHumanoid.WalkSpeed = 26
+                
+                -- Постепенно увеличиваем скорость для меньшей заметности
+                local currentVelocity = myRoot.Velocity
+                local targetVelocity = (targetRoot.Position - myRoot.Position).Unit * 85
+                local smoothVelocity = currentVelocity:Lerp(targetVelocity, 0.25)
+                
+                -- Применяем скорость с небольшой случайностью для имитации естественного движения
+                myRoot.Velocity = smoothVelocity + Vector3.new(
+                    math.random(-10, 10),
+                    math.random(35, 65),
+                    math.random(-10, 10)
+                )
+                
+                -- Позиционируем персонажа для столкновения
+                local targetDistance = (targetRoot.Position - myRoot.Position).Magnitude
+                if targetDistance > 10 then
+                    -- Если далеко от цели, приближаемся
+                    myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 3)
+                else
+                    -- Если близко, выполняем удар сверху
+                    myRoot.CFrame = targetRoot.CFrame * CFrame.new(
+                        math.random(-2, 2),
+                        math.random(3, 5),
+                        math.random(-2, 2)
+                    )
+                    
+                    -- Имитируем прыжок для увеличения импульса
+                    myHumanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end)
+            
+            -- Создаем таймер для остановки флинга через некоторое время
+            o.flingTimeout = task.delay(15, function()
+                -- Автоматически останавливаем флинг через 15 секунд для избежания обнаружения
+                if o.isFlingActive then
+                    o.isFlingActive = false
+                    
+                    if o.flingConnection then
+                        o.flingConnection:Disconnect()
+                        o.flingConnection = nil
+                    end
+                    
+                    -- Восстанавливаем оригинальные настройки
+                    if myHumanoid then
+                        myHumanoid.JumpPower = originalJumpPower
+                        myHumanoid.WalkSpeed = originalWalkSpeed
+                    end
+                    
+                    workspace.Gravity = originalGravity
+                    
+                    -- Удаляем контрольную часть
+                    if controlPart and controlPart.Parent then
+                        controlPart:Destroy()
+                    end
+                    
+                    -- Возвращаем персонажа на исходную позицию
+                    if getgenv().OldPos and o.lp.Character and o.lp.Character:FindFirstChild("HumanoidRootPart") then
+                        o.lp.Character.HumanoidRootPart.CFrame = getgenv().OldPos
+                        
+                        -- Обнуляем скорости всех частей
+                        for _, x in pairs(o.lp.Character:GetChildren()) do
+                            if x:IsA("BasePart") then
+                                x.Velocity = Vector3.new(0, 0, 0)
+                            end
+                        end
+                    end
+                    
+                    -- Восстанавливаем NoClip если он был активен
+                    if noClipWasActive then
+                        task.wait(0.5)
+                        Library.Flags["player_nocollision"] = true
+                    end
+                end
+            end)
+        end
+    end
+})
+
+-- Добавляем кнопку Stop Fling (остановка подбрасывания)
+PlayerActionsSection:Button({
+    name = "Stop Fling",
+    callback = function()
+        -- Отключаем флинг
+        o.isFlingActive = false
+        
+        -- Отключаем соединение
+        if o.flingConnection then
+            o.flingConnection:Disconnect()
+            o.flingConnection = nil
+        end
+        
+        -- Отменяем таймер, если он активен
+        if o.flingTimeout then
+            task.cancel(o.flingTimeout)
+            o.flingTimeout = nil
+        end
+        
+        -- Удаляем контрольную часть, если она существует
+        local controlPart = workspace:FindFirstChild("FlingControl")
+        if controlPart then
+            controlPart:Destroy()
+        end
+        
+        -- Восстанавливаем настройки персонажа
+        if o.lp.Character then
+            local myHumanoid = o.lp.Character:FindFirstChildOfClass("Humanoid")
+            if myHumanoid then
+                -- Восстанавливаем стандартные значения
+                myHumanoid.JumpPower = 50
+                myHumanoid.WalkSpeed = 16
+            end
+        end
+        
+        -- Возвращаем персонажа на исходную позицию
+        if getgenv().OldPos and o.lp.Character and o.lp.Character:FindFirstChild("HumanoidRootPart") then
+            o.lp.Character.HumanoidRootPart.CFrame = getgenv().OldPos
+            
+            -- Обнуляем скорости всех частей
+            for _, x in pairs(o.lp.Character:GetChildren()) do
+                if x:IsA("BasePart") then
+                    x.Velocity = Vector3.new(0, 0, 0)
+                end
+            end
+        end
+    end
+})
+
+-- Добавляем тогл Destroy Seats в секцию Extra
+ExtraSection:Toggle({
+    name = "Destroy Seats",
+    default = false,
+    flag = "misc_destroyseats",
+    callback = function(value)
+        if value then
+            -- Сохраняем оригинальные сиденья
+            if not o.originalSeats then
+                o.originalSeats = {}
+                
+                -- Находим все сиденья в игре
+                for _, seat in pairs(workspace:GetDescendants()) do
+                    if seat:IsA("Seat") or seat:IsA("VehicleSeat") then
+                        -- Сохраняем информацию о сиденье
+                        table.insert(o.originalSeats, {
+                            instance = seat,
+                            parent = seat.Parent,
+                            position = seat.Position,
+                            orientation = seat.Orientation,
+                            size = seat.Size,
+                            anchored = seat.Anchored,
+                            canCollide = seat.CanCollide,
+                            disabled = false
+                        })
+                        
+                        -- "Уничтожаем" сиденье (делаем невидимым и неактивным)
+                        seat.CanCollide = false
+                        seat.Anchored = true
+                        seat.Disabled = true
+                        seat.Transparency = 1
+                    end
+                end
+            else
+                -- Если сиденья уже были сохранены, просто деактивируем их
+                for _, seatData in pairs(o.originalSeats) do
+                    if seatData.instance and seatData.instance.Parent then
+                        seatData.instance.CanCollide = false
+                        seatData.instance.Anchored = true
+                        seatData.instance.Disabled = true
+                        seatData.instance.Transparency = 1
+                        seatData.disabled = true
+                    end
+                end
+            end
+            
+            -- Создаем соединение для обработки новых сидений
+            if not o.seatsConnection then
+                o.seatsConnection = workspace.DescendantAdded:Connect(function(descendant)
+                    if (descendant:IsA("Seat") or descendant:IsA("VehicleSeat")) and Library.Flags["misc_destroyseats"] then
+                        -- Сохраняем информацию о новом сиденье
+                        table.insert(o.originalSeats, {
+                            instance = descendant,
+                            parent = descendant.Parent,
+                            position = descendant.Position,
+                            orientation = descendant.Orientation,
+                            size = descendant.Size,
+                            anchored = descendant.Anchored,
+                            canCollide = descendant.CanCollide,
+                            disabled = true
+                        })
+                        
+                        -- "Уничтожаем" сиденье
+                        descendant.CanCollide = false
+                        descendant.Anchored = true
+                        descendant.Disabled = true
+                        descendant.Transparency = 1
+                    end
+                end)
+            end
+        else
+            -- Восстанавливаем сиденья
+            if o.originalSeats then
+                for _, seatData in pairs(o.originalSeats) do
+                    if seatData.instance and seatData.instance.Parent then
+                        -- Восстанавливаем оригинальные свойства
+                        seatData.instance.CanCollide = seatData.canCollide
+                        seatData.instance.Anchored = seatData.anchored
+                        seatData.instance.Disabled = false
+                        seatData.instance.Transparency = 0
+                        seatData.disabled = false
+                    end
+                end
+            end
+            
+            -- Отключаем соединение
+            if o.seatsConnection then
+                o.seatsConnection:Disconnect()
+                o.seatsConnection = nil
+            end
+        end
+    end
+})
+
+-- Добавляем кнопку Teleport (телепортация к игроку)
+PlayerActionsSection:Button({
+    name = "Teleport",
+    callback = function()
+        if o.selectedPlayer and o.selectedPlayer.Character and o.lp.Character then
+            -- Телепортируемся к игроку
+            o.lp.Character.HumanoidRootPart.CFrame = o.selectedPlayer.Character.HumanoidRootPart.CFrame
+        end
+    end
+})
