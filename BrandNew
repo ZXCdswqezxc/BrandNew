@@ -596,14 +596,14 @@ end
 
 -- Получение позиций (старой и новой)
 function o.Desync:GetPositions()
-    local Positions = self.Positions
-    local Status = self:Active()
+    o.common_vars.positions = self.Positions
+    o.common_vars.status = self:Active()
 
-    if not Status then
+    if not o.common_vars.status then
         return
     end
 
-    return Positions.Old, Positions.New
+    return o.common_vars.positions.Old, o.common_vars.positions.New
 end
 
 -- Получение значения интерполяции
@@ -762,10 +762,10 @@ end
 
 -- Уничтожение клонированного персонажа
 function o.Desync:DestroyClonedCharacter()
-    local ClonedCharacter = self.ClonedCharacter
+    o.common_vars.clonedCharacter = self.ClonedCharacter
 
-    if ClonedCharacter and ClonedCharacter.Character then
-        ClonedCharacter.Character:Destroy()
+    if o.common_vars.clonedCharacter and o.common_vars.clonedCharacter.Character then
+        o.common_vars.clonedCharacter.Character:Destroy()
         self.ClonedCharacter = nil
         return true
     end
@@ -2176,87 +2176,83 @@ print("script is loaded. If u paid for this, u are retard")
 MiscUtilsSection = MiscTab:Section({name = "Utils", description = ">_<"})
 
 -- Auto Armor logic
-local run = game:GetService("RunService")
-local ws = game:GetService("Workspace")
-local lp = game:GetService("Players").LocalPlayer
-local misc = {}
-local auto_armor = false
+o.misc = {}
+o.auto_armor = false
 
-misc.auto_armor = function()
-    if not auto_armor then return end
-    local char = lp.Character
-    local placeId = game.PlaceId
+o.misc.auto_armor = function()
+    if not o.auto_armor then return end
+    o.common_vars.char = o.lp.Character
+    o.common_vars.placeId = game.PlaceId
     
-    if placeId == 2788229376 then
+    if o.common_vars.placeId == 2788229376 then
         -- Первая игра - проверяем BodyEffects.Armor
-        if char and char:FindFirstChild("BodyEffects") and char.BodyEffects:FindFirstChild("Armor") then
-            local armorValue = char.BodyEffects.Armor.Value
-            if armorValue < 100 then
-                misc.buying_armor = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.CFrame
-                local armorShop = ws:FindFirstChild("Ignored") and ws.Ignored:FindFirstChild("Shop")
-                local armorItem = armorShop and armorShop:FindFirstChild("[High-Medium Armor] - $2513")
-                if armorItem and armorItem:FindFirstChild("Head") and armorItem:FindFirstChild("ClickDetector") then
-                    char.HumanoidRootPart.CFrame = armorItem.Head.CFrame
-                    fireclickdetector(armorItem.ClickDetector)
-                    run.RenderStepped:Wait()
-                    char.HumanoidRootPart.CFrame = misc.buying_armor
+        if o.common_vars.char and o.common_vars.char:FindFirstChild("BodyEffects") and o.common_vars.char.BodyEffects:FindFirstChild("Armor") then
+            o.common_vars.armorValue = o.common_vars.char.BodyEffects.Armor.Value
+            if o.common_vars.armorValue < 100 then
+                o.misc.buying_armor = o.common_vars.char:FindFirstChild("HumanoidRootPart") and o.common_vars.char.HumanoidRootPart.CFrame
+                o.common_vars.armorShop = o.ws:FindFirstChild("Ignored") and o.ws.Ignored:FindFirstChild("Shop")
+                o.common_vars.armorItem = o.common_vars.armorShop and o.common_vars.armorShop:FindFirstChild("[High-Medium Armor] - $2513")
+                if o.common_vars.armorItem and o.common_vars.armorItem:FindFirstChild("Head") and o.common_vars.armorItem:FindFirstChild("ClickDetector") then
+                    o.common_vars.char.HumanoidRootPart.CFrame = o.common_vars.armorItem.Head.CFrame
+                    fireclickdetector(o.common_vars.armorItem.ClickDetector)
+                    o.rs.RenderStepped:Wait()
+                    o.common_vars.char.HumanoidRootPart.CFrame = o.misc.buying_armor
                 end
             else
-                misc.buying_armor = nil
+                o.misc.buying_armor = nil
             end
         end
-    elseif placeId == 71189885129233 then
+    elseif o.common_vars.placeId == 71189885129233 then
         -- Вторая игра - проверяем DataFolder.Information.Armor
-        if lp:FindFirstChild("DataFolder") and lp.DataFolder:FindFirstChild("Information") and lp.DataFolder.Information:FindFirstChild("Armor") then
-            local armorValue = tonumber(lp.DataFolder.Information.Armor.Value) or 0
-            if armorValue < 100 then
-                local armorShop = ws:FindFirstChild("Ignored") and ws.Ignored:FindFirstChild("Shop")
+        if o.lp:FindFirstChild("DataFolder") and o.lp.DataFolder:FindFirstChild("Information") and o.lp.DataFolder.Information:FindFirstChild("Armor") then
+            o.common_vars.armorValue = tonumber(o.lp.DataFolder.Information.Armor.Value) or 0
+            if o.common_vars.armorValue < 100 then
+                o.common_vars.armorShop = o.ws:FindFirstChild("Ignored") and o.ws.Ignored:FindFirstChild("Shop")
                 
-                local function getSafeArmorShop()
-                    if not armorShop then return nil end
-                    local delHoodArmorOptions = {
-                        {index = 59, name = "Max Armor 1"},
-                        {index = 46, name = "Max Armor 2"},
-                        {index = 63, name = "Max Armor 3"},
-                        {index = 68, name = "Max Armor 4"},
-                        {name = "[Max Armor]", direct = true}
-                    }
-                    
-                    for i, option in ipairs(delHoodArmorOptions) do
-                        local armorObj
-                        if option.direct then
-                            armorObj = armorShop:FindFirstChild(option.name)
-                        else
-                            armorObj = armorShop:GetChildren()[option.index]
-                        end
-                        if armorObj and armorObj:FindFirstChild("Head") and armorObj:FindFirstChild("ClickDetector") then
-                            return armorObj
-                        end
+                o.common_vars.delHoodArmorOptions = {
+                    {index = 59, name = "Max Armor 1"},
+                    {index = 46, name = "Max Armor 2"},
+                    {index = 63, name = "Max Armor 3"},
+                    {index = 68, name = "Max Armor 4"},
+                    {name = "[Max Armor]", direct = true}
+                }
+                
+                for i, option in ipairs(o.common_vars.delHoodArmorOptions) do
+                    o.common_vars.armorObj = nil
+                    if option.direct then
+                        o.common_vars.armorObj = o.common_vars.armorShop:FindFirstChild(option.name)
+                    else
+                        o.common_vars.armorObj = o.common_vars.armorShop:GetChildren()[option.index]
                     end
-                    
-                    -- Поиск по имени если ничего не найдено
-                    for _, item in pairs(armorShop:GetChildren()) do
-                        if item.Name:lower():find("armor") and item.Name:lower():find("max") and item:FindFirstChild("Head") and item:FindFirstChild("ClickDetector") then
-                            return item
-                        end
+                    if o.common_vars.armorObj and o.common_vars.armorObj:FindFirstChild("Head") and o.common_vars.armorObj:FindFirstChild("ClickDetector") then
+                        o.common_vars.armorItem = o.common_vars.armorObj
+                        break
                     end
-                    return nil
                 end
                 
-                local armorItem = getSafeArmorShop()
-                if armorItem then
-                    misc.buying_armor = char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.CFrame
-                    char.HumanoidRootPart.CFrame = armorItem.Head.CFrame
-                    fireclickdetector(armorItem.ClickDetector)
-                    run.RenderStepped:Wait()
-                    char.HumanoidRootPart.CFrame = misc.buying_armor
+                -- Поиск по имени если ничего не найдено
+                if not o.common_vars.armorItem then
+                    for _, item in pairs(o.common_vars.armorShop:GetChildren()) do
+                        if item.Name:lower():find("armor") and item.Name:lower():find("max") and item:FindFirstChild("Head") and item:FindFirstChild("ClickDetector") then
+                            o.common_vars.armorItem = item
+                            break
+                        end
+                    end
+                end
+                
+                if o.common_vars.armorItem then
+                    o.misc.buying_armor = o.common_vars.char:FindFirstChild("HumanoidRootPart") and o.common_vars.char.HumanoidRootPart.CFrame
+                    o.common_vars.char.HumanoidRootPart.CFrame = o.common_vars.armorItem.Head.CFrame
+                    fireclickdetector(o.common_vars.armorItem.ClickDetector)
+                    o.rs.RenderStepped:Wait()
+                    o.common_vars.char.HumanoidRootPart.CFrame = o.misc.buying_armor
                 end
             end
         end
     end
 end
 
-run.RenderStepped:Connect(misc.auto_armor)
+o.rs.RenderStepped:Connect(o.misc.auto_armor)
 
 -- UI Toggle for Auto Armor
 MiscUtilsSection:Toggle({
@@ -2264,6 +2260,227 @@ MiscUtilsSection:Toggle({
     default = false,
     flag = "misc_autoarmor",
     callback = function(v)
-        auto_armor = v
+        o.auto_armor = v
+    end
+})
+
+-- AutoBuy functionality
+o.autoBuy = {
+    enabled = false,
+    selectedItems = {},
+    itemsList = {},
+    buyingIndex = 1,
+    isBuying = false,
+    originalPosition = nil,
+    placeItems = {
+        [2788229376] = {"[LMG] - $4098", "[Rifle] - $1694", "[AUG] - $2131"},
+        [71189885129233] = {"[AK47]"}
+    }
+}
+
+-- Инициализация списка предметов в зависимости от placeId
+o.autoBuy.initializeItems = function()
+    local placeId = game.PlaceId
+    o.autoBuy.itemsList = o.autoBuy.placeItems[placeId] or o.autoBuy.placeItems[2788229376] -- Используем стандартный список, если placeId не найден
+    
+    -- Устанавливаем первый предмет как выбранный по умолчанию
+    if #o.autoBuy.itemsList > 0 then
+        o.autoBuy.selectedItems = {[o.autoBuy.itemsList[1]] = true}
+    end
+end
+
+-- Получение папки магазина
+o.common_vars.success = pcall(function()
+    o.autoBuy.shopFolder = o.ws:WaitForChild("Ignored", 5):WaitForChild("Shop", 5)
+    return true
+end)
+
+if not o.common_vars.success or not o.autoBuy.shopFolder then
+    o.autoBuy.shopFolder = nil
+end
+
+-- Инициализируем список предметов при загрузке
+o.autoBuy.initializeItems()
+
+-- Проверка наличия предмета у игрока
+o.autoBuy.hasItem = function(itemName)
+    if type(itemName) ~= "string" then
+        return false
+    end
+    
+    -- Извлекаем название оружия из строки
+    o.common_vars.nameCheck = itemName:match("%[(.-)%]")
+    if not o.common_vars.nameCheck then
+        o.common_vars.nameCheck = itemName:match("%[(.+)") -- Для случаев без закрывающей скобки
+        if not o.common_vars.nameCheck then
+            o.common_vars.nameCheck = itemName -- Используем полное имя, если не удалось извлечь
+        end
+    end
+    
+    o.common_vars.checkContainer = function(container)
+        if not container then return false end
+        for _, tool in ipairs(container:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:lower():find(o.common_vars.nameCheck:lower()) then
+                return true
+            end
+        end
+        return false
+    end
+    
+    return o.common_vars.checkContainer(o.lp.Backpack) or o.common_vars.checkContainer(o.lp.Character)
+end
+
+-- Получение списка выбранных предметов
+o.autoBuy.getSelectedItems = function()
+    o.common_vars.selected = {}
+    if type(o.autoBuy.selectedItems) == "table" then
+        for _, item in ipairs(o.autoBuy.selectedItems) do
+            if type(item) == "string" then
+                table.insert(o.common_vars.selected, item)
+            end
+        end
+    end
+    return o.common_vars.selected
+end
+
+-- Функция покупки предмета
+o.autoBuy.buyItem = function(itemName)
+    -- Сохраняем оригинальную позицию, если еще не сохранили
+    if not o.autoBuy.originalPosition and o.lp.Character and o.lp.Character:FindFirstChild("HumanoidRootPart") then
+        o.autoBuy.originalPosition = o.lp.Character.HumanoidRootPart.CFrame
+    end
+
+    -- Сначала убирает все предметы из рук в рюкзак
+    for _, tool in pairs(o.lp.Character:GetChildren()) do
+        if tool:IsA("Tool") then
+            tool.Parent = o.lp.Backpack
+        end
+    end
+
+    -- Находит нужный предмет в магазине и "кликает" по нему
+    if o.autoBuy.shopFolder then
+        for _, item in pairs(o.autoBuy.shopFolder:GetChildren()) do
+            if item.Name == itemName then
+                o.common_vars.itemHead = item:FindFirstChild("Head")
+                if o.common_vars.itemHead then
+                    -- Телепортируемся к предмету
+                    o.lp.Character.HumanoidRootPart.CFrame = o.common_vars.itemHead.CFrame + Vector3.new(0, 3.2, 0)
+                    
+                    -- Ждем немного для загрузки окружения
+                    task.wait(0.5)
+                    
+                    o.common_vars.clickdetector = item:FindFirstChild("ClickDetector")
+                    if o.common_vars.clickdetector then
+                        o.common_vars.clickdetector.MaxActivationDistance = 9e9
+                        
+                        -- Первая попытка покупки
+                        fireclickdetector(o.common_vars.clickdetector)
+                        
+                        -- Ждем для завершения покупки
+                        task.wait(1)
+                        
+                        -- Проверяем, появился ли предмет
+                        if o.autoBuy.hasItem(itemName) then
+                            return true
+                        end
+                        
+                        -- Если не появился, пробуем еще раз
+                        fireclickdetector(o.common_vars.clickdetector)
+                        task.wait(1)
+                        
+                        return o.autoBuy.hasItem(itemName)
+                    end
+                end
+                break
+            end
+        end
+    end
+    return false
+end
+
+-- Добавляем индекс текущего предмета для покупки
+o.autoBuy.currentItemIndex = 1
+
+-- Отключаем предыдущий цикл автозакупки, если он существует
+if o.autoBuy.connection then
+    o.autoBuy.connection:Disconnect()
+    o.autoBuy.connection = nil
+end
+
+-- Создаем новый цикл автозакупки
+o.autoBuy.connection = o.rs.Heartbeat:Connect(function()
+    if not o.autoBuy.enabled or o.autoBuy.isBuying then return end
+    
+    o.common_vars.selectedItems = o.autoBuy.getSelectedItems()
+    
+    if #o.common_vars.selectedItems == 0 then return end
+    
+    -- Проверяем, есть ли предметы, которые нужно купить
+    o.common_vars.missingItems = {}
+    
+    for _, item in ipairs(o.common_vars.selectedItems) do
+        if not o.autoBuy.hasItem(item) then
+            table.insert(o.common_vars.missingItems, item)
+        end
+    end
+    
+    if #o.common_vars.missingItems > 0 then
+        o.autoBuy.isBuying = true
+        
+        -- Если индекс вышел за пределы, сбрасываем его
+        if o.autoBuy.currentItemIndex > #o.common_vars.missingItems then
+            o.autoBuy.currentItemIndex = 1
+        end
+        
+        -- Покупаем текущий отсутствующий предмет
+        local item = o.common_vars.missingItems[o.autoBuy.currentItemIndex]
+        local success = o.autoBuy.buyItem(item)
+        
+        -- Возвращаемся на исходную позицию
+        o.autoBuy.returnToOriginalPosition()
+        
+        -- Увеличиваем индекс для следующего предмета
+        o.autoBuy.currentItemIndex = o.autoBuy.currentItemIndex + 1
+        
+        -- Если мы дошли до конца списка, сбрасываем индекс
+        if o.autoBuy.currentItemIndex > #o.common_vars.missingItems then
+            o.autoBuy.currentItemIndex = 1
+        end
+        
+        -- Короткая задержка перед следующей проверкой
+        task.wait(0.5)
+        o.autoBuy.isBuying = false
+    else
+        -- Если все предметы уже есть, делаем небольшую паузу
+        task.wait(1)
+        -- Сбрасываем индекс для следующего цикла
+        o.autoBuy.currentItemIndex = 1
+    end
+end)
+
+-- Функция для возврата на исходную позицию
+o.autoBuy.returnToOriginalPosition = function()
+    if o.autoBuy.originalPosition and o.lp.Character and o.lp.Character:FindFirstChild("HumanoidRootPart") then
+        o.lp.Character.HumanoidRootPart.CFrame = o.autoBuy.originalPosition
+        o.autoBuy.originalPosition = nil
+    end
+end
+
+-- UI Toggle for AutoBuy with multi-select
+MiscUtilsSection:Toggle({
+    name = "AutoBuy",
+    default = false,
+    flag = "misc_autobuy",
+    callback = function(v)
+        o.autoBuy.enabled = v
+    end
+}):Popup({size = 200}):Dropdown({
+    name = "Items",
+    values = o.autoBuy.itemsList,
+    multi = true,
+    value = o.autoBuy.itemsList[1] and {o.autoBuy.itemsList[1]} or {},
+    flag = "autobuy_items",
+    callback = function(v)
+        o.autoBuy.selectedItems = v
     end
 })
