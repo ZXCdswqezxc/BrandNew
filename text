@@ -2357,19 +2357,32 @@ local Env = getgenv()
         if visibility then
             Objects.Outline.Visible = true
             
-            -- Закрываем только popups одного родителя и того же уровня вложенности
-            -- Не трогаем popups из других ветвей иерархии
-            if Popup.ParentPopup and Popup.ParentElement and not stopPropagation then
-                for _, childPopup in pairs(Popup.ParentPopup.ChildPopups) do
-                    if childPopup ~= Popup and childPopup.Objects.Outline.Visible and childPopup.ParentElement == Popup.ParentElement then
-                        childPopup.Visible(false)
-                    end
+            if not stopPropagation then
+                -- Получаем цепочку родительских поп-апов для текущего поп-апа
+                local parentChain = Popup:GetParentChain()
+                local parentChainMap = {}
+                for _, parent in ipairs(parentChain) do
+                    parentChainMap[parent] = true
                 end
-            elseif not Popup.ParentPopup and not stopPropagation then
-                -- Если это корневой popup, закрываем только те корневые popups, которые относятся к тому же элементу
-                for _, popup in pairs(Library.Popups) do
-                    if popup ~= Popup and popup.Objects.Outline.Visible and not popup.ParentPopup and popup.ParentElement == Popup.ParentElement then
-                        popup.Visible(false)
+                
+                -- Закрываем только popups одного родителя и того же уровня вложенности
+                -- Не трогаем popups из родительской цепочки и других ветвей иерархии
+                if Popup.ParentPopup and Popup.ParentElement then
+                    for _, childPopup in pairs(Popup.ParentPopup.ChildPopups) do
+                        -- Не закрываем себя и поп-апы в родительской цепочке
+                        if childPopup ~= Popup and not parentChainMap[childPopup] and 
+                           childPopup.Objects.Outline.Visible and childPopup.ParentElement == Popup.ParentElement then
+                            childPopup.Visible(false, nil, true) -- stopPropagation=true, чтобы не затрагивать дочерние
+                        end
+                    end
+                elseif not Popup.ParentPopup then
+                    -- Если это корневой popup, закрываем только те корневые popups, которые относятся к тому же элементу
+                    for _, popup in pairs(Library.Popups) do
+                        if popup ~= Popup and not parentChainMap[popup] and 
+                           popup.Objects.Outline.Visible and not popup.ParentPopup and 
+                           popup.ParentElement == Popup.ParentElement then
+                            popup.Visible(false, nil, true) -- stopPropagation=true, чтобы не затрагивать дочерние
+                        end
                     end
                 end
             end
@@ -2434,6 +2447,19 @@ local Env = getgenv()
                 NestedPopup.ParentPopup = self
                 table.insert(self.ChildPopups, NestedPopup)
                 return NestedPopup
+            end
+            
+            -- Рекурсивная функция для получения цепочки родительских поп-апов
+            function Popup:GetParentChain()
+                local chain = {}
+                
+                local current = self
+                while current do
+                    table.insert(chain, current)
+                    current = current.ParentPopup
+                end
+                
+                return chain
             end
 
             table.insert(Library.Popups, Popup)
@@ -2524,18 +2550,40 @@ local Env = getgenv()
                             end
                         end
                         
+                        -- Проверяем родительские popup'ы (если щелкнули в родительском, не закрываем текущий)
+                        if popup.ParentPopup and popup.ParentPopup.Objects.Outline.Visible and 
+                           Utility.MouseOver(popup.ParentPopup.Objects.Outline, input) then
+                            return true
+                        end
+                        
                         return false
                     end
                     
                     -- Если курсор не внутри иконки и не внутри popup или любого вложенного popup
                     if not Utility.MouseOver(Objects.Icon, input) and not isInsideNestedPopups(Popup, input) then
-                        -- При закрытии из-за клика вне popup разрешаем распространение закрытия
-                        local stopPropagation = false
-                        Popup.Visible(false, Popup.Objects.Outline.AbsolutePosition, stopPropagation)
-
-                        Library.ChangeObjectTheme(Objects.Icon, {
-                            ImageColor3 = "Dark Text",
-                        }, true)
+                        -- Получаем родительскую цепочку, чтобы не закрывать родителей
+                        local parentChain = Popup:GetParentChain()
+                        local isInParentChain = false
+                        
+                        -- Проверяем, находится ли курсор в каком-либо из родительских поп-апов
+                        for i=2, #parentChain do -- начинаем с 2, чтобы пропустить текущий поп-ап
+                            local parent = parentChain[i]
+                            if parent.Objects.Outline.Visible and Utility.MouseOver(parent.Objects.Outline, input) then
+                                isInParentChain = true
+                                break
+                            end
+                        end
+                        
+                        -- Если курсор не в родительской цепочке, закрываем текущий поп-ап
+                        if not isInParentChain then
+                            -- При закрытии из-за клика вне popup запрещаем распространение закрытия на родителей
+                            local stopPropagation = true
+                            Popup.Visible(false, Popup.Objects.Outline.AbsolutePosition, stopPropagation)
+    
+                            Library.ChangeObjectTheme(Objects.Icon, {
+                                ImageColor3 = "Dark Text",
+                            }, true)
+                        end
                     end
                 end
             end))
