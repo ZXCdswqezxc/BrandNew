@@ -17,7 +17,7 @@ OptURL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main
 o = loadstring(game:HttpGet(OptURL))() or {}
 
 -- Загрузка UI библиотеки
-URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/testings"
+URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/ad"
 Library = loadstring(game:HttpGet(URL))()
 
 -- Примечание: Игнорируйте ошибки линтера, связанные с функциями API эксплойта, такими как:
@@ -2233,7 +2233,7 @@ o.misc.auto_armor = function()
                 o.misc.buying_armor = nil
             end
         end
-    elseif o.common_vars.placeId == 71189885129233 then
+    elseif tostring(o.common_vars.placeId) == "71189885129233" then
         -- Вторая игра - проверяем DataFolder.Information.Armor
         if o.lp:FindFirstChild("DataFolder") and o.lp.DataFolder:FindFirstChild("Information") and o.lp.DataFolder.Information:FindFirstChild("Armor") then
             o.common_vars.armorValue = tonumber(o.lp.DataFolder.Information.Armor.Value) or 0
@@ -2305,7 +2305,8 @@ o.autoBuy = {
     originalPosition = nil,
     placeItems = {
         [2788229376] = {"[LMG] - $4098", "[Rifle] - $1694", "[AUG] - $2131"},
-        [71189885129233] = {"[AK47]"}
+        -- Используем строку для большого числа
+        ["71189885129233"] = {"[AK47]"}
     },
     buyAmmo = false,
     ammoList = {
@@ -2356,7 +2357,10 @@ end
 -- Инициализация списка предметов в зависимости от placeId
 o.autoBuy.initializeItems = function()
     local placeId = game.PlaceId
-    o.autoBuy.itemsList = o.autoBuy.placeItems[placeId] or o.autoBuy.placeItems[2788229376] -- Используем стандартный список, если placeId не найден
+    local placeIdStr = tostring(placeId)
+    
+    -- Проверяем сначала числовой ключ, затем строковый
+    o.autoBuy.itemsList = o.autoBuy.placeItems[placeId] or o.autoBuy.placeItems[placeIdStr] or o.autoBuy.placeItems[2788229376]
     
     -- Устанавливаем первый предмет как выбранный по умолчанию
     if #o.autoBuy.itemsList > 0 then
@@ -2621,7 +2625,7 @@ o.AutoBuyPopup:Dropdown({
 })
 
 -- Добавлять ammo только если не 71189885129233
-if game.PlaceId ~= 71189885129233 then
+if tostring(game.PlaceId) ~= "71189885129233" then
     -- Добавляем тогл для включения/выключения автопокупки патронов
     o.AutoBuyPopup:Toggle({
         name = "Auto Buy Ammo",
@@ -3106,6 +3110,499 @@ ExtraSection:Toggle({
             if o.seatsConnection then
                 o.seatsConnection:Disconnect()
                 o.seatsConnection = nil
+            end
+        end
+    end
+})
+
+-- Создаем секцию World во вкладке Misc (справа)
+o.WorldSection = MiscTab:Section({name = "World", description = ">_<", side = "right"})
+
+-- Добавляем тогл Fog с попапом
+o.FogToggle = o.WorldSection:Toggle({
+    name = "Fog",
+    default = false,
+    flag = "world_fog",
+    callback = function(value)
+        if value then
+            -- Сохраняем оригинальные настройки тумана
+            if not o.originalFogSettings then
+                o.originalFogSettings = {
+                    FogStart = o.LS.FogStart,
+                    FogEnd = o.LS.FogEnd,
+                    FogColor = o.LS.FogColor
+                }
+            end
+            
+            -- Применяем настройки тумана
+            o.LS.FogStart = Library.Flags["fog_start"] or 0
+            o.LS.FogEnd = Library.Flags["fog_end"] or 1000
+            if Library.Flags["fog_color"] then
+                if type(Library.Flags["fog_color"]) == "table" and Library.Flags["fog_color"].c then
+                    o.LS.FogColor = Library.Flags["fog_color"].c
+                else
+                    o.LS.FogColor = Library.Flags["fog_color"]
+                end
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalFogSettings then
+                o.LS.FogStart = o.originalFogSettings.FogStart
+                o.LS.FogEnd = o.originalFogSettings.FogEnd
+                o.LS.FogColor = o.originalFogSettings.FogColor
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек тумана
+o.FogPopup = o.FogToggle:Popup({size = 200})
+
+-- Добавляем слайдер для начала тумана
+o.FogPopup:Slider({
+    name = "FogStart",
+    min = 0,
+    max = 1000,
+    default = 0,
+    float = 1,
+    flag = "fog_start",
+    callback = function(value)
+        if Library.Flags["world_fog"] then
+            o.LS.FogStart = value
+        end
+    end
+})
+
+-- Добавляем слайдер для конца тумана
+o.FogPopup:Slider({
+    name = "FogEnd",
+    min = 0,
+    max = 10000,
+    default = 1000,
+    float = 1,
+    flag = "fog_end",
+    callback = function(value)
+        if Library.Flags["world_fog"] then
+            o.LS.FogEnd = value
+        end
+    end
+})
+
+-- Добавляем колорпикер для цвета тумана
+o.FogPopup:Colorpicker({
+    name = "FogColor",
+    description = ">_<",
+    default = Color3.fromRGB(192, 192, 192),
+    flag = "fog_color",
+    callback = function(color)
+        if Library.Flags["world_fog"] then
+            if type(color) == "table" and color.c then
+                o.LS.FogColor = color.c
+            else
+                o.LS.FogColor = color
+            end
+        end
+    end
+})
+
+-- Добавляем тогл Bloom с попапом
+o.BloomToggle = o.WorldSection:Toggle({
+    name = "Bloom",
+    default = false,
+    flag = "world_bloom",
+    callback = function(value)
+        -- Проверяем, существует ли эффект Bloom
+        o.common_vars.bloomEffect = o.LS:FindFirstChild("Bloom")
+        
+        if value then
+            -- Создаем эффект Bloom, если его нет
+            if not o.common_vars.bloomEffect then
+                o.common_vars.bloomEffect = Instance.new("BloomEffect")
+                o.common_vars.bloomEffect.Name = "Bloom"
+                o.common_vars.bloomEffect.Parent = o.LS
+            end
+            
+            -- Применяем настройки Bloom
+            o.common_vars.bloomEffect.Intensity = Library.Flags["bloom_intensity"] or 0
+            o.common_vars.bloomEffect.Size = Library.Flags["bloom_size"] or 0
+            o.common_vars.bloomEffect.Threshold = Library.Flags["bloom_threshold"] or 0
+            o.common_vars.bloomEffect.Enabled = true
+        else
+            -- Отключаем эффект Bloom
+            if o.common_vars.bloomEffect then
+                o.common_vars.bloomEffect.Enabled = false
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек Bloom
+o.BloomPopup = o.BloomToggle:Popup({size = 200})
+
+-- Добавляем слайдер для интенсивности Bloom
+o.BloomPopup:Slider({
+    name = "Intensity",
+    min = 0,
+    max = 5,
+    default = 0,
+    float = 0.01,
+    flag = "bloom_intensity",
+    callback = function(value)
+        o.common_vars.bloomEffect = o.LS:FindFirstChild("Bloom")
+        if Library.Flags["world_bloom"] and o.common_vars.bloomEffect then
+            o.common_vars.bloomEffect.Intensity = value
+        end
+    end
+})
+
+-- Добавляем слайдер для размера Bloom
+o.BloomPopup:Slider({
+    name = "Size",
+    min = 0,
+    max = 50,
+    default = 0,
+    float = 0.01,
+    flag = "bloom_size",
+    callback = function(value)
+        o.common_vars.bloomEffect = o.LS:FindFirstChild("Bloom")
+        if Library.Flags["world_bloom"] and o.common_vars.bloomEffect then
+            o.common_vars.bloomEffect.Size = value
+        end
+    end
+})
+
+-- Добавляем слайдер для порога Bloom
+o.BloomPopup:Slider({
+    name = "Threshold",
+    min = 0,
+    max = 10,
+    default = 0,
+    float = 0.01,
+    flag = "bloom_threshold",
+    callback = function(value)
+        o.common_vars.bloomEffect = o.LS:FindFirstChild("Bloom")
+        if Library.Flags["world_bloom"] and o.common_vars.bloomEffect then
+            o.common_vars.bloomEffect.Threshold = value
+        end
+    end
+})
+
+-- Добавляем тогл ColorCorrection с попапом
+o.ColorCorrectionToggle = o.WorldSection:Toggle({
+    name = "ColorCorrection",
+    default = false,
+    flag = "world_colorcorrection",
+    callback = function(value)
+        -- Проверяем, существует ли эффект ColorCorrection
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        
+        if value then
+            -- Создаем эффект ColorCorrection, если его нет
+            if not o.common_vars.colorEffect then
+                o.common_vars.colorEffect = Instance.new("ColorCorrectionEffect")
+                o.common_vars.colorEffect.Name = "ColorCorrection"
+                o.common_vars.colorEffect.Parent = o.LS
+            end
+            
+            -- Применяем настройки ColorCorrection
+            o.common_vars.colorEffect.Brightness = Library.Flags["cc_brightness"] or 0
+            o.common_vars.colorEffect.Contrast = Library.Flags["cc_contrast"] or 0
+            o.common_vars.colorEffect.Saturation = Library.Flags["cc_saturation"] or 0
+            
+            if Library.Flags["cc_tint"] then
+                if type(Library.Flags["cc_tint"]) == "table" and Library.Flags["cc_tint"].c then
+                    o.common_vars.colorEffect.TintColor = Library.Flags["cc_tint"].c
+                else
+                    o.common_vars.colorEffect.TintColor = Library.Flags["cc_tint"]
+                end
+            end
+            
+            o.common_vars.colorEffect.Enabled = true
+        else
+            -- Отключаем эффект ColorCorrection
+            if o.common_vars.colorEffect then
+                o.common_vars.colorEffect.Enabled = false
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек ColorCorrection
+o.ColorCorrectionPopup = o.ColorCorrectionToggle:Popup({size = 200})
+
+-- Добавляем слайдер для яркости
+o.ColorCorrectionPopup:Slider({
+    name = "Brightness",
+    min = -1,
+    max = 1,
+    default = 0,
+    float = 0.05,
+    flag = "cc_brightness",
+    callback = function(value)
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        if Library.Flags["world_colorcorrection"] and o.common_vars.colorEffect then
+            o.common_vars.colorEffect.Brightness = value
+        end
+    end
+})
+
+-- Добавляем слайдер для контраста
+o.ColorCorrectionPopup:Slider({
+    name = "Contrast",
+    min = -1,
+    max = 1,
+    default = 0,
+    float = 0.05,
+    flag = "cc_contrast",
+    callback = function(value)
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        if Library.Flags["world_colorcorrection"] and o.common_vars.colorEffect then
+            o.common_vars.colorEffect.Contrast = value
+        end
+    end
+})
+
+-- Добавляем слайдер для насыщенности
+o.ColorCorrectionPopup:Slider({
+    name = "Saturation",
+    min = -1,
+    max = 1,
+    default = 0,
+    float = 0.05,
+    flag = "cc_saturation",
+    callback = function(value)
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        if Library.Flags["world_colorcorrection"] and o.common_vars.colorEffect then
+            o.common_vars.colorEffect.Saturation = value
+        end
+    end
+})
+
+-- Добавляем колорпикер для оттенка (TintColor - это цветовой фильтр, который накладывается на изображение)
+o.ColorCorrectionPopup:Colorpicker({
+    name = "TintColor",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255), -- Белый цвет не меняет изображение
+    flag = "cc_tint",
+    callback = function(color)
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        if Library.Flags["world_colorcorrection"] and o.common_vars.colorEffect then
+            if type(color) == "table" and color.c then
+                o.common_vars.colorEffect.TintColor = color.c
+            else
+                o.common_vars.colorEffect.TintColor = color
+            end
+        end
+    end
+})
+
+-- Добавляем тогл Shadows с попапом
+o.ShadowsToggle = o.WorldSection:Toggle({
+    name = "Shadows",
+    default = false,
+    flag = "world_shadows",
+    callback = function(value)
+        -- Сохраняем оригинальные настройки теней при первом включении
+        if not o.originalShadowSettings then
+            o.originalShadowSettings = {
+                GlobalShadows = o.LS.GlobalShadows
+            }
+        end
+        
+        if value then
+            -- Применяем настройки теней из флагов
+            if Library.Flags["shadows_disable"] ~= nil then
+                o.LS.GlobalShadows = not Library.Flags["shadows_disable"]
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalShadowSettings then
+                o.LS.GlobalShadows = o.originalShadowSettings.GlobalShadows
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек теней
+o.ShadowsPopup = o.ShadowsToggle:Popup({size = 150})
+
+-- Добавляем тогл для отключения теней
+o.ShadowsPopup:Toggle({
+    name = "DisableShadows",
+    default = false,
+    flag = "shadows_disable",
+    callback = function(value)
+        if Library.Flags["world_shadows"] then
+            o.LS.GlobalShadows = not value
+        end
+    end
+})
+
+-- Добавляем тогл Ambient с попапом
+o.AmbientToggle = o.WorldSection:Toggle({
+    name = "Ambient",
+    default = false,
+    flag = "world_ambient",
+    callback = function(value)
+        -- Сохраняем оригинальные настройки окружающего света при первом включении
+        if not o.originalAmbientSettings then
+            o.originalAmbientSettings = {
+                Ambient = o.LS.Ambient
+            }
+        end
+        
+        if value then
+            -- Применяем настройки окружающего света из флагов
+            if Library.Flags["ambient_color"] then
+                if type(Library.Flags["ambient_color"]) == "table" and Library.Flags["ambient_color"].c then
+                    o.LS.Ambient = Library.Flags["ambient_color"].c
+                else
+                    o.LS.Ambient = Library.Flags["ambient_color"]
+                end
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalAmbientSettings then
+                o.LS.Ambient = o.originalAmbientSettings.Ambient
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек окружающего света
+o.AmbientPopup = o.AmbientToggle:Popup({size = 150})
+
+-- Добавляем колорпикер для цвета окружающего света
+o.AmbientPopup:Colorpicker({
+    name = "AmbientColor",
+    description = ">_<",
+    default = Color3.fromRGB(0, 0, 0),
+    flag = "ambient_color",
+    callback = function(color)
+        if Library.Flags["world_ambient"] then
+            if type(color) == "table" and color.c then
+                o.LS.Ambient = color.c
+            else
+                o.LS.Ambient = color
+            end
+        end
+    end
+})
+
+-- Добавляем тогл ClockTime с попапом
+o.ClockTimeToggle = o.WorldSection:Toggle({
+    name = "ClockTime",
+    default = false,
+    flag = "world_clocktime",
+    callback = function(value)
+        -- Сохраняем оригинальные настройки времени при первом включении
+        if not o.originalTimeSettings then
+            o.originalTimeSettings = {
+                ClockTime = o.LS.ClockTime,
+                TimeOfDay = o.LS.TimeOfDay
+            }
+        end
+        
+        if value then
+            -- Применяем настройки времени из флагов
+            o.LS.ClockTime = Library.Flags["clocktime_value"] or 0
+            
+            -- Создаем соединение для обновления времени
+            if not o.clockTimeConnection then
+                o.clockTimeConnection = o.rs.Heartbeat:Connect(function()
+                    if Library.Flags["world_clocktime"] and o.LS.ClockTime ~= Library.Flags["clocktime_value"] then
+                        o.LS.ClockTime = Library.Flags["clocktime_value"] or 14
+                    end
+                end)
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalTimeSettings then
+                o.LS.ClockTime = o.originalTimeSettings.ClockTime
+                o.LS.TimeOfDay = o.originalTimeSettings.TimeOfDay
+            end
+            
+            -- Отключаем соединение
+            if o.clockTimeConnection then
+                o.clockTimeConnection:Disconnect()
+                o.clockTimeConnection = nil
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек времени
+o.ClockTimePopup = o.ClockTimeToggle:Popup({size = 150})
+
+-- Добавляем слайдер для времени
+o.ClockTimePopup:Slider({
+    name = "Time",
+    min = 0,
+    max = 24,
+    default = 0,
+    float = 0.1,
+    flag = "clocktime_value",
+    callback = function(value)
+        if Library.Flags["world_clocktime"] then
+            o.LS.ClockTime = value
+        end
+    end
+})
+
+-- Добавляем тогл LightingType с попапом
+o.LightingTypeToggle = o.WorldSection:Toggle({
+    name = "LightingType",
+    default = false,
+    flag = "world_lightingtype",
+    callback = function(value)
+        -- Сохраняем оригинальные настройки типа освещения при первом включении
+        if not o.originalLightingTypeSettings then
+            o.originalLightingTypeSettings = {
+                Technology = o.LS.Technology
+            }
+        end
+        
+        if value then
+            -- Применяем настройки типа освещения из флагов
+            o.common_vars.lightingType = Library.Flags["lightingtype_value"]
+            
+            if o.common_vars.lightingType == "Voxel" then
+                o.LS.Technology = Enum.Technology.Voxel
+            elseif o.common_vars.lightingType == "Legacy" then
+                o.LS.Technology = Enum.Technology.Legacy
+            elseif o.common_vars.lightingType == "ShadowMap" then
+                o.LS.Technology = Enum.Technology.ShadowMap
+            elseif o.common_vars.lightingType == "Future" then
+                o.LS.Technology = Enum.Technology.Future
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalLightingTypeSettings then
+                o.LS.Technology = o.originalLightingTypeSettings.Technology
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек типа освещения
+o.LightingTypePopup = o.LightingTypeToggle:Popup({size = 150})
+
+-- Добавляем выпадающий список для типа освещения
+o.LightingTypePopup:Dropdown({
+    name = "Type",
+    values = {"Voxel", "Legacy", "ShadowMap", "Future"},
+    value = "Voxel",
+    flag = "lightingtype_value",
+    callback = function(value)
+        if Library.Flags["world_lightingtype"] then
+            if value == "Voxel" then
+                o.LS.Technology = Enum.Technology.Voxel
+            elseif value == "Legacy" then
+                o.LS.Technology = Enum.Technology.Legacy
+            elseif value == "ShadowMap" then
+                o.LS.Technology = Enum.Technology.ShadowMap
+            elseif value == "Future" then
+                o.LS.Technology = Enum.Technology.Future
             end
         end
     end
