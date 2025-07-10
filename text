@@ -17,7 +17,7 @@ OptURL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main
 o = loadstring(game:HttpGet(OptURL))() or {}
 
 -- Загрузка UI библиотеки
-URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/testings"
+URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/jerk"
 Library = loadstring(game:HttpGet(URL))()
 
 -- Примечание: Игнорируйте ошибки линтера, связанные с функциями API эксплойта, такими как:
@@ -47,6 +47,1576 @@ VisualsTab = Window:Tab({name = "Visuals", icon = "rbxassetid://6031075931"})
 MiscTab = Window:Tab({name = "Misc", icon = "rbxassetid://6031094678"})
 PlayerTab = Window:Tab({name = "Player", icon = "rbxassetid://6031068427"})
 ConfigTab = Window:Tab({name = "Config", icon = "rbxassetid://6031280882"})
+
+-- Создаем секцию Main во вкладке Visuals
+VisualsMainSection = VisualsTab:Section({name = "Main", description = ">_<", side = "right"})
+
+-- Конфигурация трейсеров
+local BulletTracersConfig = {
+    Enabled = false,  -- Включить/выключить трейсеры (true/false)
+    Color1 = Color3.new(1, 1, 1),  -- Начальный цвет трейсера
+    Color2 = Color3.new(1, 1, 1),  -- Конечный цвет трейсера
+    Thickness = 1,  -- Толщина трейсера
+    Texture = "rbxassetid://446111271"  -- Текстура трейсера (Starhook)
+}
+
+-- Конфигурация MaterialChams
+local MaterialChamsConfig = {
+    Self = {
+        Enabled = false,
+        Material = Enum.Material.ForceField,
+        Color = Color3.fromRGB(0, 170, 255),
+        OriginalMaterials = {},
+        OriginalColors = {}
+    },
+    Other = {
+        Enabled = false,
+        Material = Enum.Material.ForceField,
+        Color = Color3.fromRGB(255, 0, 0),
+        Players = {}
+    },
+    Friend = {
+        Enabled = false,
+        Material = Enum.Material.ForceField,
+        Color = Color3.fromRGB(0, 255, 0),
+        Friends = {}
+    }
+}
+
+-- Конфигурация HighlightChams
+local HighlightChamsConfig = {
+    Self = {
+        Enabled = false,
+        FillColor = Color3.fromRGB(0, 170, 255),
+        OutlineColor = Color3.fromRGB(255, 255, 255),
+        FillTransparency = 0.5,
+        OutlineTransparency = 0,
+        DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
+        Highlight = nil
+    },
+    Other = {
+        Enabled = false,
+        FillColor = Color3.fromRGB(255, 0, 0),
+        OutlineColor = Color3.fromRGB(255, 255, 255),
+        FillTransparency = 0.5,
+        OutlineTransparency = 0,
+        DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
+        Players = {}
+    },
+    Friend = {
+        Enabled = false,
+        FillColor = Color3.fromRGB(0, 255, 0),
+        OutlineColor = Color3.fromRGB(255, 255, 255),
+        FillTransparency = 0.5,
+        OutlineTransparency = 0,
+        DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
+        Friends = {}
+    }
+}
+
+-- Загрузка списка друзей
+local function loadFriends()
+    if not isfile or not readfile then return {} end
+    
+    if isfile("BrandNew/friends.json") then
+        local success, result = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(readfile("BrandNew/friends.json"))
+        end)
+        
+        if success then
+            return result
+        end
+    end
+    
+    return {}
+end
+
+-- Сохранение списка друзей
+local function saveFriends()
+    if not writefile or not makefolder then return end
+    
+    if not isfolder("BrandNew") then
+        makefolder("BrandNew")
+    end
+    
+    local success, result = pcall(function()
+        return game:GetService("HttpService"):JSONEncode(MaterialChamsConfig.Friend.Friends)
+    end)
+    
+    if success then
+        writefile("BrandNew/friends.json", result)
+    end
+end
+
+-- Загружаем друзей при запуске
+MaterialChamsConfig.Friend.Friends = loadFriends()
+
+-- Функция для применения SelfChams
+local function applySelfChams()
+    local LocalPlayer = game:GetService('Players').LocalPlayer
+    local Character = LocalPlayer.Character
+    if not Character then return end
+    
+    -- Используем pcall для безопасного выполнения
+    pcall(function()
+        -- Кэшируем конфиг для быстрого доступа
+        local config = MaterialChamsConfig.Self
+        local material = config.Material
+        local color = config.Color
+        
+        -- Сохраняем и изменяем материал для всех частей тела
+        for _, part in pairs(Character:GetChildren()) do
+            if part and part:IsA("BasePart") then
+                -- Сохраняем оригинальный материал и цвет, если еще не сохранены
+                if not config.OriginalMaterials[part] then
+                    config.OriginalMaterials[part] = part.Material
+                    config.OriginalColors[part] = part.Color
+                end
+                
+                -- Применяем новый материал и цвет
+                part.Material = material
+                part.Color = color
+            end
+            
+            -- Обрабатываем аксессуары
+            if part and part:IsA("Accessory") then
+                local handle = part:FindFirstChild("Handle")
+                if handle then
+                    if not config.OriginalMaterials[handle] then
+                        config.OriginalMaterials[handle] = handle.Material
+                        config.OriginalColors[handle] = handle.Color
+                    end
+                    
+                    handle.Material = material
+                    handle.Color = color
+                end
+            end
+        end
+    end)
+end
+
+-- Функция для применения SelfHighlight
+local function applySelfHighlight()
+    local LocalPlayer = game:GetService('Players').LocalPlayer
+    local Character = LocalPlayer.Character
+    if not Character then return end
+    
+    -- Используем pcall для безопасного выполнения
+    pcall(function()
+        -- Кэшируем конфиг для быстрого доступа
+        local config = HighlightChamsConfig.Self
+        local highlight = config.Highlight
+        
+        -- Если Highlight уже существует, просто обновим его настройки вместо пересоздания
+        if highlight and highlight.Parent and highlight.Parent:IsDescendantOf(game) then
+            -- Обновляем настройки существующего Highlight
+            highlight.FillColor = config.FillColor
+            highlight.OutlineColor = config.OutlineColor
+            highlight.FillTransparency = config.FillTransparency
+            highlight.OutlineTransparency = config.OutlineTransparency
+            highlight.DepthMode = config.DepthMode
+            
+            -- Если Adornee изменился (новый персонаж), обновляем его
+            if highlight.Adornee ~= Character then
+                highlight.Adornee = Character
+            end
+        else
+            -- Удаляем старый хайлайт, если есть
+            if highlight and highlight:IsA("Highlight") then
+                highlight:Destroy()
+                config.Highlight = nil
+            end
+            
+            -- Создаем новый хайлайт
+            local newHighlight = Instance.new("Highlight")
+            newHighlight.Name = "SelfHighlight"
+            newHighlight.FillColor = config.FillColor
+            newHighlight.OutlineColor = config.OutlineColor
+            newHighlight.FillTransparency = config.FillTransparency
+            newHighlight.OutlineTransparency = config.OutlineTransparency
+            newHighlight.DepthMode = config.DepthMode
+            newHighlight.Adornee = Character
+            newHighlight.Parent = Character
+            
+            -- Сохраняем ссылку на хайлайт
+            config.Highlight = newHighlight
+        end
+    end)
+end
+
+-- Функция для отключения SelfChams
+local function removeSelfChams()
+    -- Используем pcall для безопасного выполнения
+    pcall(function()
+        -- Кэшируем конфиг для быстрого доступа
+        local config = MaterialChamsConfig.Self
+        
+        -- Восстанавливаем оригинальные материалы и цвета
+        for part, material in pairs(config.OriginalMaterials) do
+            if part and part:IsDescendantOf(game) then
+                pcall(function()
+                    part.Material = material
+                    
+                    -- Восстанавливаем оригинальный цвет, если он был сохранен
+                    if config.OriginalColors[part] then
+                        part.Color = config.OriginalColors[part]
+                    end
+                end)
+            end
+        end
+        
+        -- Очищаем сохраненные материалы и цвета
+        config.OriginalMaterials = {}
+        config.OriginalColors = {}
+    end)
+end
+
+-- Функция для отключения SelfHighlight
+local function removeSelfHighlight()
+    -- Используем pcall для безопасного выполнения
+    pcall(function()
+        -- Кэшируем конфиг для быстрого доступа
+        local config = HighlightChamsConfig.Self
+        
+        -- Удаляем хайлайт, если он существует
+        if config.Highlight and config.Highlight:IsA("Highlight") then
+            config.Highlight:Destroy()
+            config.Highlight = nil
+        end
+    end)
+end
+
+-- Функция для применения Chams к другим игрокам
+local function applyOtherChams()
+    local Players = game:GetService('Players')
+    local LocalPlayer = Players.LocalPlayer
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            -- Пропускаем друзей, если включен Friend Chams
+            if MaterialChamsConfig.Friend.Enabled and MaterialChamsConfig.Friend.Friends[player.Name] then
+                continue
+            end
+            
+            local character = player.Character
+            local config = MaterialChamsConfig.Other
+            
+            -- Сохраняем ссылку на персонажа для обновления
+            config.Players[player.Name] = character
+            
+            -- Применяем материал и цвет ко всем частям тела
+            for _, part in pairs(character:GetChildren()) do
+                if part and part:IsA("BasePart") then
+                    part.Material = config.Material
+                    part.Color = config.Color
+                end
+                
+                -- Обрабатываем аксессуары
+                if part and part:IsA("Accessory") then
+                    local handle = part:FindFirstChild("Handle")
+                    if handle then
+                        handle.Material = config.Material
+                        handle.Color = config.Color
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Функция для применения Highlight к другим игрокам
+local function applyOtherHighlight()
+    local Players = game:GetService('Players')
+    local LocalPlayer = Players.LocalPlayer
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            -- Пропускаем друзей, если включен Friend Highlight
+            if HighlightChamsConfig.Friend.Enabled and MaterialChamsConfig.Friend.Friends[player.Name] then
+                continue
+            end
+            
+            local character = player.Character
+            local config = HighlightChamsConfig.Other
+            
+            -- Проверяем существующий хайлайт
+            local existingData = config.Players[player.Name]
+            local existingHighlight = existingData and existingData.Highlight
+            
+            -- Если хайлайт уже существует и привязан к тому же персонажу, обновляем настройки
+            if existingHighlight and existingHighlight.Parent and existingHighlight.Parent:IsDescendantOf(game) and 
+               existingData.Character == character then
+                -- Обновляем настройки существующего хайлайта
+                existingHighlight.FillColor = config.FillColor
+                existingHighlight.OutlineColor = config.OutlineColor
+                existingHighlight.FillTransparency = config.FillTransparency
+                existingHighlight.OutlineTransparency = config.OutlineTransparency
+                existingHighlight.DepthMode = config.DepthMode
+            else
+                -- Удаляем старый хайлайт, если есть
+                if existingHighlight and existingHighlight:IsA("Highlight") then
+                    existingHighlight:Destroy()
+                end
+                
+                -- Создаем новый хайлайт
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "OtherHighlight_" .. player.Name
+                highlight.FillColor = config.FillColor
+                highlight.OutlineColor = config.OutlineColor
+                highlight.FillTransparency = config.FillTransparency
+                highlight.OutlineTransparency = config.OutlineTransparency
+                highlight.DepthMode = config.DepthMode
+                highlight.Adornee = character
+                highlight.Parent = character
+                
+                -- Сохраняем ссылку на хайлайт
+                config.Players[player.Name] = {
+                    Character = character,
+                    Highlight = highlight
+                }
+            end
+        end
+    end
+end
+
+-- Функция для отключения Chams у других игроков
+local function removeOtherChams()
+    local Players = game:GetService('Players')
+    local config = MaterialChamsConfig.Other
+    
+    for playerName, character in pairs(config.Players) do
+        if character and character:IsDescendantOf(game) then
+            for _, part in pairs(character:GetChildren()) do
+                if part and part:IsA("BasePart") then
+                    pcall(function()
+                        part.Material = Enum.Material.Plastic
+                        part.Color = Color3.new(1, 1, 1)
+                    end)
+                end
+                
+                if part and part:IsA("Accessory") then
+                    local handle = part:FindFirstChild("Handle")
+                    if handle then
+                        pcall(function()
+                            handle.Material = Enum.Material.Plastic
+                            handle.Color = Color3.new(1, 1, 1)
+                        end)
+                    end
+                end
+            end
+        end
+    end
+    
+    config.Players = {}
+end
+
+-- Функция для отключения Highlight у других игроков
+local function removeOtherHighlight()
+    local config = HighlightChamsConfig.Other
+    
+    for playerName, data in pairs(config.Players) do
+        if data and data.Highlight and data.Highlight:IsA("Highlight") then
+            pcall(function()
+                data.Highlight:Destroy()
+            end)
+        end
+    end
+    
+    config.Players = {}
+end
+
+-- Функция для применения Chams к друзьям
+local function applyFriendChams()
+    local Players = game:GetService('Players')
+    local config = MaterialChamsConfig.Friend
+    
+    for playerName, _ in pairs(config.Friends) do
+        local player = Players:FindFirstChild(playerName)
+        if player and player.Character then
+            local character = player.Character
+            
+            -- Применяем материал и цвет ко всем частям тела
+            for _, part in pairs(character:GetChildren()) do
+                if part and part:IsA("BasePart") then
+                    part.Material = config.Material
+                    part.Color = config.Color
+                end
+                
+                -- Обрабатываем аксессуары
+                if part and part:IsA("Accessory") then
+                    local handle = part:FindFirstChild("Handle")
+                    if handle then
+                        handle.Material = config.Material
+                        handle.Color = config.Color
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Функция для применения Highlight к друзьям
+local function applyFriendHighlight()
+    local Players = game:GetService('Players')
+    local config = HighlightChamsConfig.Friend
+    
+    -- Инициализируем Friends, если они еще не инициализированы
+    if not config.Friends then
+        config.Friends = {}
+    end
+    
+    for playerName, _ in pairs(MaterialChamsConfig.Friend.Friends) do
+        local player = Players:FindFirstChild(playerName)
+        if player and player.Character then
+            local character = player.Character
+            
+            -- Проверяем существующий хайлайт
+            local existingData = config.Friends[playerName]
+            local existingHighlight = existingData and existingData.Highlight
+            
+            -- Если хайлайт уже существует и привязан к тому же персонажу, обновляем настройки
+            if existingHighlight and existingHighlight.Parent and existingHighlight.Parent:IsDescendantOf(game) and 
+               existingData.Character == character then
+                -- Обновляем настройки существующего хайлайта
+                existingHighlight.FillColor = config.FillColor
+                existingHighlight.OutlineColor = config.OutlineColor
+                existingHighlight.FillTransparency = config.FillTransparency
+                existingHighlight.OutlineTransparency = config.OutlineTransparency
+                existingHighlight.DepthMode = config.DepthMode
+            else
+                -- Удаляем старый хайлайт, если есть
+                if existingHighlight and existingHighlight:IsA("Highlight") then
+                    existingHighlight:Destroy()
+                end
+                
+                -- Создаем новый хайлайт
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "FriendHighlight_" .. playerName
+                highlight.FillColor = config.FillColor
+                highlight.OutlineColor = config.OutlineColor
+                highlight.FillTransparency = config.FillTransparency
+                highlight.OutlineTransparency = config.OutlineTransparency
+                highlight.DepthMode = config.DepthMode
+                highlight.Adornee = character
+                highlight.Parent = character
+                
+                -- Сохраняем ссылку на хайлайт
+                config.Friends[playerName] = {
+                    Character = character,
+                    Highlight = highlight
+                }
+            end
+        end
+    end
+end
+
+-- Функция для отключения Highlight у друзей
+local function removeFriendHighlight()
+    local config = HighlightChamsConfig.Friend
+    
+    for playerName, data in pairs(config.Friends) do
+        if data and data.Highlight and data.Highlight:IsA("Highlight") then
+            pcall(function()
+                data.Highlight:Destroy()
+            end)
+        end
+    end
+    
+    config.Friends = {}
+end
+
+-- Функция для обновления всех Chams
+local function updateAllChams()
+    -- Обновляем Self Chams
+    if MaterialChamsConfig.Self.Enabled then
+        applySelfChams()
+    else
+        removeSelfChams()
+    end
+    
+    -- Обновляем Friend Chams
+    if MaterialChamsConfig.Friend.Enabled then
+        applyFriendChams()
+    end
+    
+    -- Обновляем Other Chams
+    if MaterialChamsConfig.Other.Enabled then
+        applyOtherChams()
+    else
+        removeOtherChams()
+    end
+end
+
+-- Функция для обновления всех Highlights
+local function updateAllHighlights()
+    -- Обновляем Self Highlight
+    if HighlightChamsConfig.Self.Enabled then
+        applySelfHighlight()
+    else
+        removeSelfHighlight()
+    end
+    
+    -- Обновляем Friend Highlight
+    if HighlightChamsConfig.Friend.Enabled then
+        applyFriendHighlight()
+    else
+        removeFriendHighlight()
+    end
+    
+    -- Обновляем Other Highlight
+    if HighlightChamsConfig.Other.Enabled then
+        applyOtherHighlight()
+    else
+        removeOtherHighlight()
+    end
+end
+
+-- Обновление при смене персонажа
+game:GetService('Players').LocalPlayer.CharacterAdded:Connect(function(character)
+    -- Небольшая задержка, чтобы персонаж полностью загрузился
+    task.wait(0.5)
+    updateAllChams()
+    updateAllHighlights()
+    
+    -- Отслеживаем смерть персонажа для обновления чамсов и хайлайтов
+    character:WaitForChild("Humanoid").Died:Connect(function()
+        -- Сохраняем текущие состояния MaterialChams
+        local selfMaterialEnabled = MaterialChamsConfig.Self.Enabled
+        local otherMaterialEnabled = MaterialChamsConfig.Other.Enabled
+        local friendMaterialEnabled = MaterialChamsConfig.Friend.Enabled
+        
+        -- Сохраняем текущие состояния HighlightChams
+        local selfHighlightEnabled = HighlightChamsConfig.Self.Enabled
+        local otherHighlightEnabled = HighlightChamsConfig.Other.Enabled
+        local friendHighlightEnabled = HighlightChamsConfig.Friend.Enabled
+        
+        -- Очищаем чамсы и хайлайты
+        removeSelfChams()
+        removeSelfHighlight()
+        
+        -- Ждем возрождения персонажа
+        task.wait(1)
+        
+        -- Восстанавливаем состояния MaterialChams, если главный тогл включен
+        if Library.Flags["visual_materialchams"] then
+            MaterialChamsConfig.Self.Enabled = selfMaterialEnabled
+            MaterialChamsConfig.Other.Enabled = otherMaterialEnabled
+            MaterialChamsConfig.Friend.Enabled = friendMaterialEnabled
+            
+            -- Применяем чамсы заново
+            updateAllChams()
+        end
+        
+        -- Восстанавливаем состояния HighlightChams, если главный тогл включен
+        if Library.Flags["visual_highlightchams"] then
+            HighlightChamsConfig.Self.Enabled = selfHighlightEnabled
+            HighlightChamsConfig.Other.Enabled = otherHighlightEnabled
+            HighlightChamsConfig.Friend.Enabled = friendHighlightEnabled
+            
+            -- Применяем хайлайты заново
+            updateAllHighlights()
+        end
+    end)
+end)
+
+-- Добавляем обработчик для текущего персонажа
+local currentCharacter = game:GetService('Players').LocalPlayer.Character
+if currentCharacter then
+    currentCharacter:WaitForChild("Humanoid").Died:Connect(function()
+        -- Сохраняем текущие состояния MaterialChams
+        local selfMaterialEnabled = MaterialChamsConfig.Self.Enabled
+        local otherMaterialEnabled = MaterialChamsConfig.Other.Enabled
+        local friendMaterialEnabled = MaterialChamsConfig.Friend.Enabled
+        
+        -- Сохраняем текущие состояния HighlightChams
+        local selfHighlightEnabled = HighlightChamsConfig.Self.Enabled
+        local otherHighlightEnabled = HighlightChamsConfig.Other.Enabled
+        local friendHighlightEnabled = HighlightChamsConfig.Friend.Enabled
+        
+        -- Очищаем чамсы и хайлайты
+        removeSelfChams()
+        removeSelfHighlight()
+        
+        -- Ждем возрождения персонажа
+        task.wait(1)
+        
+        -- Восстанавливаем состояния MaterialChams, если главный тогл включен
+        if Library.Flags["visual_materialchams"] then
+            MaterialChamsConfig.Self.Enabled = selfMaterialEnabled
+            MaterialChamsConfig.Other.Enabled = otherMaterialEnabled
+            MaterialChamsConfig.Friend.Enabled = friendMaterialEnabled
+            
+            -- Применяем чамсы заново
+            updateAllChams()
+        end
+        
+        -- Восстанавливаем состояния HighlightChams, если главный тогл включен
+        if Library.Flags["visual_highlightchams"] then
+            HighlightChamsConfig.Self.Enabled = selfHighlightEnabled
+            HighlightChamsConfig.Other.Enabled = otherHighlightEnabled
+            HighlightChamsConfig.Friend.Enabled = friendHighlightEnabled
+            
+            -- Применяем хайлайты заново
+            updateAllHighlights()
+        end
+    end)
+end
+
+-- Состояние оружия
+local gunState = {
+    current_tool = nil,
+    previous_ammo = 0,
+    recently_shot = false,
+    connections = {}
+}
+
+-- Определение игры и путей к пулям
+local function detectGame()
+    local placeId = game.PlaceId
+    
+    local gameData = {
+        -- Da Hood
+        [2788229376] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored.Siren.Radius" },
+        [71189885129233] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" },
+        [5602055394] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" },
+        [17403265390] = { BN = "Part", BBN = "gb", BP = "" },
+        [17403166075] = { BN = "Part", BBN = "gb", BP = "" },
+        [18111448661] = { BN = "Part", BBN = "gb", BP = "" },
+        [15186202290] = { BN = "Part", BBN = "gb", BP = "" },
+        [11143225577] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "" },
+        [15763494605] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "" },
+        [15166543806] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "" },
+        [17897702920] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "" },
+        [16033173781] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored.Siren.Radius" },
+        [7213786345] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored.Siren.Radius" },
+        [9825515356] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" },
+        [16859411452] = { BN = "bulletray", BBN = "beam", BP = "Ignored" },
+        [14277620939] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" },
+        [0] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" }
+    }
+    
+    local data = gameData[placeId] or gameData[0]
+    return data
+end
+
+-- Получение пути к пулям
+local function getPath(root, path)
+    if path == "" then return root end
+    local parts = string.split(path, ".")
+    local current = root
+    for _, part in ipairs(parts) do
+        current = current:FindFirstChild(part)
+        if not current then return nil end
+    end
+    return current
+end
+
+-- Создание луча (beam)
+local function createBeam(from, to, color1, color2, thickness, texture)
+    -- Создаем невидимую основную часть
+    local mainPart = Instance.new("Part")
+    mainPart.Name = "BulletTracer"
+    mainPart.Parent = workspace
+    mainPart.Size = Vector3.new(0, 0, 0)
+    mainPart.Massless = true
+    mainPart.Transparency = 1
+    mainPart.CanCollide = false
+    mainPart.Position = from
+    mainPart.Anchored = true
+    
+    -- Создаем две точки для луча
+    local part0 = Instance.new("Part")
+    part0.Parent = mainPart
+    part0.Size = Vector3.new(0, 0, 0)
+    part0.Massless = true
+    part0.Transparency = 1
+    part0.CanCollide = false
+    part0.Position = from
+    part0.Anchored = true
+    
+    local part1 = Instance.new("Part")
+    part1.Parent = mainPart
+    part1.Size = Vector3.new(0, 0, 0)
+    part1.Massless = true
+    part1.Transparency = 1
+    part1.CanCollide = false
+    part1.Position = to
+    part1.Anchored = true
+    
+    -- Создаем точки крепления для луча
+    local attachment0 = Instance.new("Attachment")
+    attachment0.Parent = part0
+    
+    local attachment1 = Instance.new("Attachment")
+    attachment1.Parent = part1
+    
+    -- Создаем сам луч с градиентом цвета
+    local beam = Instance.new("Beam")
+    beam.Texture = texture
+    beam.TextureMode = Enum.TextureMode.Wrap
+    beam.TextureLength = 10
+    beam.LightEmission = 1
+    beam.LightInfluence = 1
+    beam.FaceCamera = true
+    beam.ZOffset = -1
+    beam.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    beam.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, color1),
+        ColorSequenceKeypoint.new(1, color2),
+    })
+    beam.Attachment0 = attachment0
+    beam.Attachment1 = attachment1
+    beam.Width0 = thickness
+    beam.Width1 = thickness
+    beam.Enabled = true
+    beam.Parent = mainPart
+    
+    -- Уничтожаем луч через указанное время
+    task.delay(0.4, function()
+        mainPart:Destroy()
+    end)
+end
+
+-- Функция для получения оружия локального игрока
+local function getGun(player)
+    if not player or not player.Character then return nil end
+    
+    local tool = player.Character:FindFirstChildWhichIsA("Tool")
+    if not tool then return nil end
+    
+    local gunInfo = {}
+    
+    -- Ищем значение патронов в оружии
+    local descendants = tool:GetDescendants()
+    for _, obj in ipairs(descendants) do
+        if (string.lower(obj.Name):find("ammo") and not string.lower(obj.Name):find("max") and
+            (obj.ClassName == "IntValue" or obj.ClassName == "NumberValue")) then
+            gunInfo.ammo = obj
+            gunInfo.tool = tool
+            return gunInfo
+        end
+    end
+    
+    return nil
+end
+
+-- Функция для настройки отслеживания оружия
+local function setupGunTracking(player)
+    -- Очищаем текущие соединения
+    for _, connection in ipairs(gunState.connections) do
+        if connection then connection:Disconnect() end
+    end
+    gunState.connections = {}
+    
+    -- Если персонаж игрока не существует, создаем соединение на его появление
+    if not player.Character then
+        table.insert(gunState.connections, player.CharacterAdded:Connect(function(character)
+            setupGunTracking(player)
+        end))
+        return
+    end
+    
+    -- Отслеживаем добавление/удаление оружия
+    table.insert(gunState.connections, player.Character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            local gun = getGun(player)
+            if gun then
+                gunState.current_tool = gun.tool
+                gunState.previous_ammo = gun.ammo.Value
+                
+                -- Отслеживаем изменение количества патронов
+                table.insert(gunState.connections, gun.ammo.Changed:Connect(function()
+                    local new_ammo = gun.ammo.Value
+                    if new_ammo < gunState.previous_ammo then
+                        gunState.recently_shot = true
+                        task.wait() -- Короткая пауза для обнаружения пули
+                        gunState.recently_shot = false
+                    end
+                    gunState.previous_ammo = new_ammo
+                end))
+            end
+        end
+    end))
+    
+    table.insert(gunState.connections, player.Character.ChildRemoved:Connect(function(child)
+        if child == gunState.current_tool then
+            gunState.current_tool = nil
+            gunState.previous_ammo = 0
+        end
+    end))
+    
+    -- Проверяем наличие оружия сразу
+    local gun = getGun(player)
+    if gun then
+        gunState.current_tool = gun.tool
+        gunState.previous_ammo = gun.ammo.Value
+        
+        -- Отслеживаем изменение количества патронов
+        table.insert(gunState.connections, gun.ammo.Changed:Connect(function()
+            local new_ammo = gun.ammo.Value
+            if new_ammo < gunState.previous_ammo then
+                gunState.recently_shot = true
+                task.wait() -- Короткая пауза для обнаружения пули
+                gunState.recently_shot = false
+            end
+            gunState.previous_ammo = new_ammo
+        end))
+    end
+end
+
+-- Основная функция для настройки эффектов пуль
+local function setupBulletEffects()
+    local gameData = detectGame()
+    local bulletPath = getPath(workspace, gameData.BP) or workspace
+    
+    -- Настраиваем отслеживание оружия локального игрока
+    setupGunTracking(game.Players.LocalPlayer)
+    
+    -- Отслеживаем добавление персонажа, если он еще не существует
+    if not game.Players.LocalPlayer.Character then
+        game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
+            setupGunTracking(game.Players.LocalPlayer)
+        end)
+    end
+    
+    -- Удаляем старые соединения, если они существуют
+    if getgenv().bulletTracerConnection then
+        getgenv().bulletTracerConnection:Disconnect()
+        getgenv().bulletTracerConnection = nil
+    end
+    
+    -- Следим за созданием новых пуль
+    getgenv().bulletTracerConnection = bulletPath.ChildAdded:Connect(function(object)
+        if not BulletTracersConfig.Enabled then return end
+        
+        -- Проверяем, чтобы это была пуля с правильным именем
+        if object.Name == gameData.BN then
+            task.spawn(function()
+                local gunBeam = object:WaitForChild(gameData.BBN, 0.2)
+                if not gunBeam then return end
+                
+                local startPos = object.Position
+                local endPos = gunBeam.Attachment1.WorldPosition
+                
+                -- Удаляем оригинальный луч
+                gunBeam:Destroy()
+                
+                -- Создаем трейсер
+                createBeam(
+                    startPos, 
+                    endPos, 
+                    BulletTracersConfig.Color1, 
+                    BulletTracersConfig.Color2, 
+                    BulletTracersConfig.Thickness,
+                    BulletTracersConfig.Texture
+                )
+            end)
+        end
+    end)
+    
+    -- Добавляем дополнительное отслеживание для случаев, когда ChildAdded не срабатывает
+    if getgenv().bulletTracerBackupConnection then
+        getgenv().bulletTracerBackupConnection:Disconnect()
+        getgenv().bulletTracerBackupConnection = nil
+    end
+    
+    getgenv().bulletTracerBackupConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not BulletTracersConfig.Enabled then return end
+        
+        -- Проверяем все пули в рабочем пространстве
+        for _, object in ipairs(bulletPath:GetChildren()) do
+            if object.Name == gameData.BN and object:IsA("BasePart") then
+                local gunBeam = object:FindFirstChild(gameData.BBN)
+                if gunBeam and not gunBeam:GetAttribute("Processed") then
+                    gunBeam:SetAttribute("Processed", true)
+                    
+                    task.spawn(function()
+                        local startPos = object.Position
+                        local endPos = gunBeam.Attachment1.WorldPosition
+                        
+                        -- Удаляем оригинальный луч
+                        gunBeam:Destroy()
+                        
+                        -- Создаем трейсер
+                        createBeam(
+                            startPos, 
+                            endPos, 
+                            BulletTracersConfig.Color1, 
+                            BulletTracersConfig.Color2, 
+                            BulletTracersConfig.Thickness,
+                            BulletTracersConfig.Texture
+                        )
+                    end)
+                end
+            end
+        end
+    end)
+end
+
+-- Добавляем тогл Bullet Tracers с попапом
+local BulletTracersToggle = VisualsMainSection:Toggle({
+    name = "Bullet Tracers",
+    default = false,
+    flag = "visuals_bullet_tracers",
+    callback = function(value)
+        BulletTracersConfig.Enabled = value
+        
+        -- Если включаем трейсеры, настраиваем их
+        if value then
+            setupBulletEffects()
+        end
+    end
+})
+
+-- Создаем попап для настроек трейсеров
+local BulletTracersPopup = BulletTracersToggle:Popup({size = 200})
+
+-- Добавляем колорпикер для начального цвета трейсера
+BulletTracersPopup:Colorpicker({
+    name = "Start Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "bullet_tracers_color1",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            BulletTracersConfig.Color1 = color.c
+        else
+            BulletTracersConfig.Color1 = color
+        end
+    end
+})
+
+-- Добавляем колорпикер для конечного цвета трейсера
+BulletTracersPopup:Colorpicker({
+    name = "End Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "bullet_tracers_color2",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            BulletTracersConfig.Color2 = color.c
+        else
+            BulletTracersConfig.Color2 = color
+        end
+    end
+})
+
+-- Добавляем слайдер для толщины трейсера
+BulletTracersPopup:Slider({
+    name = "Thickness",
+    min = 0.1,
+    max = 5,
+    default = 1,
+    float = 0.1,
+    flag = "bullet_tracers_thickness",
+    callback = function(value)
+        BulletTracersConfig.Thickness = value
+    end
+})
+
+-- Добавляем выпадающий список для текстуры трейсера
+BulletTracersPopup:Dropdown({
+    name = "Texture",
+    values = {"Default", "Starhook", "Chain", "Lightning", "Beam", "Neon", "Laser"},
+    value = "Starhook",
+    flag = "bullet_tracers_texture",
+    callback = function(value)
+        local textures = {
+            ["Default"] = "",
+            ["Starhook"] = "rbxassetid://446111271",
+            ["Chain"] = "rbxassetid://3029306948",
+            ["Lightning"] = "rbxassetid://7216850022",
+            ["Beam"] = "rbxassetid://1263079249",
+            ["Neon"] = "rbxassetid://5864341017",
+            ["Laser"] = "rbxassetid://5864341017"
+        }
+        BulletTracersConfig.Texture = textures[value] or ""
+    end
+})
+
+-- Добавляем тогл MaterialChams с попапом
+local MaterialChamsToggle = VisualsMainSection:Toggle({
+    name = "Material Chams",
+    default = false,
+    flag = "visual_materialchams",
+    callback = function(value)
+        -- Обновляем состояние всех подтоглов в зависимости от главного тогла
+        if not value then
+            -- Если главный тогл выключен, выключаем все чамсы
+            MaterialChamsConfig.Self.Enabled = false
+            MaterialChamsConfig.Other.Enabled = false
+            MaterialChamsConfig.Friend.Enabled = false
+            removeSelfChams()
+            removeOtherChams()
+        else
+            -- Если главный тогл включен, восстанавливаем состояния из флагов
+            MaterialChamsConfig.Self.Enabled = Library.Flags["material_chams_self"] or false
+            MaterialChamsConfig.Other.Enabled = Library.Flags["material_chams_other"] or false
+            MaterialChamsConfig.Friend.Enabled = Library.Flags["material_chams_friend"] or false
+        end
+        
+        -- Обновляем все чамсы
+        updateAllChams()
+    end
+})
+
+-- Создаем попап для MaterialChams
+local MaterialChamsPopup = MaterialChamsToggle:Popup({size = 250})
+
+-- Добавляем тогл Self с попапом
+local SelfChamsToggle = MaterialChamsPopup:Toggle({
+    name = "Self",
+    default = false,
+    flag = "material_chams_self",
+    callback = function(value)
+        MaterialChamsConfig.Self.Enabled = value
+        
+        -- Проверяем состояние главного тогла
+        if not Library.Flags["visual_materialchams"] then
+            return
+        end
+        
+        if value then
+            applySelfChams()
+        else
+            removeSelfChams()
+        end
+    end
+})
+
+-- Создаем попап для Self
+local SelfChamsPopup = SelfChamsToggle:Popup({size = 200})
+
+-- Устанавливаем материал ForceField для Self
+MaterialChamsConfig.Self.Material = Enum.Material.ForceField
+
+-- Добавляем колорпикер для цвета Self
+SelfChamsPopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "self_chams_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            MaterialChamsConfig.Self.Color = color.c
+        else
+            MaterialChamsConfig.Self.Color = color
+        end
+        
+        -- Если включено, сразу применяем новый цвет
+        if MaterialChamsConfig.Self.Enabled then
+            applySelfChams()
+        end
+    end
+})
+
+-- Добавляем тогл Other с попапом
+local OtherChamsToggle = MaterialChamsPopup:Toggle({
+    name = "Other",
+    default = false,
+    flag = "material_chams_other",
+    callback = function(value)
+        MaterialChamsConfig.Other.Enabled = value
+        
+        -- Проверяем состояние главного тогла
+        if not Library.Flags["visual_materialchams"] then
+            return
+        end
+        
+        if value then
+            applyOtherChams()
+        else
+            removeOtherChams()
+        end
+    end
+})
+
+-- Создаем попап для Other
+local OtherChamsPopup = OtherChamsToggle:Popup({size = 200})
+
+-- Устанавливаем материал ForceField для Other
+MaterialChamsConfig.Other.Material = Enum.Material.ForceField
+
+-- Добавляем колорпикер для цвета Other
+OtherChamsPopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 0, 0),
+    flag = "other_chams_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            MaterialChamsConfig.Other.Color = color.c
+        else
+            MaterialChamsConfig.Other.Color = color
+        end
+        
+        -- Если включено, сразу применяем новый цвет
+        if MaterialChamsConfig.Other.Enabled then
+            applyOtherChams()
+        end
+    end
+})
+
+-- Добавляем тогл Friend с попапом
+local FriendChamsToggle = MaterialChamsPopup:Toggle({
+    name = "Friend",
+    default = false,
+    flag = "material_chams_friend",
+    callback = function(value)
+        MaterialChamsConfig.Friend.Enabled = value
+        
+        -- Проверяем состояние главного тогла
+        if not Library.Flags["visual_materialchams"] then
+            return
+        end
+        
+        if value then
+            applyFriendChams()
+        end
+    end
+})
+
+-- Создаем попап для Friend
+local FriendChamsPopup = FriendChamsToggle:Popup({size = 200})
+
+-- Устанавливаем материал ForceField для Friend
+MaterialChamsConfig.Friend.Material = Enum.Material.ForceField
+
+-- Добавляем колорпикер для цвета Friend
+FriendChamsPopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "friend_chams_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            MaterialChamsConfig.Friend.Color = color.c
+        else
+            MaterialChamsConfig.Friend.Color = color
+        end
+        
+        -- Если включено, сразу применяем новый цвет
+        if MaterialChamsConfig.Friend.Enabled then
+            applyFriendChams()
+        end
+    end
+})
+
+-- Создаем список игроков для добавления в друзья
+local playersList = {}
+for _, player in pairs(game:GetService("Players"):GetPlayers()) do
+    if player ~= game:GetService("Players").LocalPlayer then
+        table.insert(playersList, player.Name)
+    end
+end
+
+-- Добавляем список игроков
+local PlayersListBox = FriendChamsPopup:List({
+    name = "Players",
+    values = playersList,
+    flag = "friend_players_list",
+    callback = function(value)
+        -- Сохраняем выбранного игрока
+        FriendChamsPopup.selectedPlayer = value
+    end
+})
+
+-- Добавляем тогл Chams Highlights с попапом
+local HighlightChamsToggle = VisualsMainSection:Toggle({
+    name = "Chams Highlights",
+    default = false,
+    flag = "visual_highlightchams",
+    callback = function(value)
+        -- Обновляем состояние всех подтоглов в зависимости от главного тогла
+        if not value then
+            -- Если главный тогл выключен, выключаем все хайлайты
+            HighlightChamsConfig.Self.Enabled = false
+            HighlightChamsConfig.Other.Enabled = false
+            HighlightChamsConfig.Friend.Enabled = false
+            removeSelfHighlight()
+            removeOtherHighlight()
+            removeFriendHighlight()
+        else
+            -- Если главный тогл включен, восстанавливаем состояния из флагов
+            HighlightChamsConfig.Self.Enabled = Library.Flags["highlight_chams_self"] or false
+            HighlightChamsConfig.Other.Enabled = Library.Flags["highlight_chams_other"] or false
+            HighlightChamsConfig.Friend.Enabled = Library.Flags["highlight_chams_friend"] or false
+        end
+        
+        -- Обновляем все хайлайты
+        updateAllHighlights()
+    end
+})
+
+-- Создаем попап для HighlightChams
+local HighlightChamsPopup = HighlightChamsToggle:Popup({size = 250})
+
+-- Добавляем тогл Self с попапом
+local SelfHighlightToggle = HighlightChamsPopup:Toggle({
+    name = "Self",
+    default = false,
+    flag = "highlight_chams_self",
+    callback = function(value)
+        HighlightChamsConfig.Self.Enabled = value
+        
+        -- Проверяем состояние главного тогла
+        if not Library.Flags["visual_highlightchams"] then
+            return
+        end
+        
+        if value then
+            applySelfHighlight()
+        else
+            removeSelfHighlight()
+        end
+    end
+})
+
+-- Создаем попап для Self
+local SelfHighlightPopup = SelfHighlightToggle:Popup({size = 200})
+
+-- Добавляем слайдер для прозрачности заливки
+SelfHighlightPopup:Slider({
+    name = "Fill Transparency",
+    min = 0,
+    max = 1,
+    default = 0.5,
+    float = 0.01,
+    flag = "self_highlight_fill_transparency",
+    callback = function(value)
+        HighlightChamsConfig.Self.FillTransparency = value
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Self.Enabled and Library.Flags["visual_highlightchams"] then
+            if HighlightChamsConfig.Self.Highlight then
+                HighlightChamsConfig.Self.Highlight.FillTransparency = value
+            end
+        end
+    end
+})
+
+-- Добавляем слайдер для прозрачности обводки
+SelfHighlightPopup:Slider({
+    name = "Outline Transparency",
+    min = 0,
+    max = 1,
+    default = 0,
+    float = 0.01,
+    flag = "self_highlight_outline_transparency",
+    callback = function(value)
+        HighlightChamsConfig.Self.OutlineTransparency = value
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Self.Enabled and Library.Flags["visual_highlightchams"] then
+            if HighlightChamsConfig.Self.Highlight then
+                HighlightChamsConfig.Self.Highlight.OutlineTransparency = value
+            end
+        end
+    end
+})
+
+-- Добавляем колорпикер для цвета заливки
+SelfHighlightPopup:Colorpicker({
+    name = "Fill Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "self_highlight_fill_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            HighlightChamsConfig.Self.FillColor = color.c
+        else
+            HighlightChamsConfig.Self.FillColor = color
+        end
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Self.Enabled and Library.Flags["visual_highlightchams"] then
+            if HighlightChamsConfig.Self.Highlight then
+                HighlightChamsConfig.Self.Highlight.FillColor = HighlightChamsConfig.Self.FillColor
+            end
+        end
+    end
+})
+
+-- Добавляем колорпикер для цвета обводки
+SelfHighlightPopup:Colorpicker({
+    name = "Outline Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "self_highlight_outline_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            HighlightChamsConfig.Self.OutlineColor = color.c
+        else
+            HighlightChamsConfig.Self.OutlineColor = color
+        end
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Self.Enabled and Library.Flags["visual_highlightchams"] then
+            if HighlightChamsConfig.Self.Highlight then
+                HighlightChamsConfig.Self.Highlight.OutlineColor = HighlightChamsConfig.Self.OutlineColor
+            end
+        end
+    end
+})
+
+-- Добавляем тогл Other с попапом
+local OtherHighlightToggle = HighlightChamsPopup:Toggle({
+    name = "Other",
+    default = false,
+    flag = "highlight_chams_other",
+    callback = function(value)
+        HighlightChamsConfig.Other.Enabled = value
+        
+        -- Проверяем состояние главного тогла
+        if not Library.Flags["visual_highlightchams"] then
+            return
+        end
+        
+        if value then
+            applyOtherHighlight()
+        else
+            removeOtherHighlight()
+        end
+    end
+})
+
+-- Создаем попап для Other
+local OtherHighlightPopup = OtherHighlightToggle:Popup({size = 200})
+
+-- Добавляем слайдер для прозрачности заливки
+OtherHighlightPopup:Slider({
+    name = "Fill Transparency",
+    min = 0,
+    max = 1,
+    default = 0.5,
+    float = 0.01,
+    flag = "other_highlight_fill_transparency",
+    callback = function(value)
+        HighlightChamsConfig.Other.FillTransparency = value
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Other.Enabled and Library.Flags["visual_highlightchams"] then
+            applyOtherHighlight()
+        end
+    end
+})
+
+-- Добавляем слайдер для прозрачности обводки
+OtherHighlightPopup:Slider({
+    name = "Outline Transparency",
+    min = 0,
+    max = 1,
+    default = 0,
+    float = 0.01,
+    flag = "other_highlight_outline_transparency",
+    callback = function(value)
+        HighlightChamsConfig.Other.OutlineTransparency = value
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Other.Enabled and Library.Flags["visual_highlightchams"] then
+            applyOtherHighlight()
+        end
+    end
+})
+
+-- Добавляем колорпикер для цвета заливки
+OtherHighlightPopup:Colorpicker({
+    name = "Fill Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 0, 0),
+    flag = "other_highlight_fill_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            HighlightChamsConfig.Other.FillColor = color.c
+        else
+            HighlightChamsConfig.Other.FillColor = color
+        end
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Other.Enabled and Library.Flags["visual_highlightchams"] then
+            applyOtherHighlight()
+        end
+    end
+})
+
+-- Добавляем колорпикер для цвета обводки
+OtherHighlightPopup:Colorpicker({
+    name = "Outline Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "other_highlight_outline_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            HighlightChamsConfig.Other.OutlineColor = color.c
+        else
+            HighlightChamsConfig.Other.OutlineColor = color
+        end
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Other.Enabled and Library.Flags["visual_highlightchams"] then
+            applyOtherHighlight()
+        end
+    end
+})
+
+-- Добавляем тогл Friend с попапом
+local FriendHighlightToggle = HighlightChamsPopup:Toggle({
+    name = "Friend",
+    default = false,
+    flag = "highlight_chams_friend",
+    callback = function(value)
+        HighlightChamsConfig.Friend.Enabled = value
+        
+        -- Проверяем состояние главного тогла
+        if not Library.Flags["visual_highlightchams"] then
+            return
+        end
+        
+        if value then
+            applyFriendHighlight()
+        else
+            removeFriendHighlight()
+        end
+    end
+})
+
+-- Создаем попап для Friend
+local FriendHighlightPopup = FriendHighlightToggle:Popup({size = 200})
+
+-- Добавляем слайдер для прозрачности заливки
+FriendHighlightPopup:Slider({
+    name = "Fill Transparency",
+    min = 0,
+    max = 1,
+    default = 0.5,
+    float = 0.01,
+    flag = "friend_highlight_fill_transparency",
+    callback = function(value)
+        HighlightChamsConfig.Friend.FillTransparency = value
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Friend.Enabled and Library.Flags["visual_highlightchams"] then
+            applyFriendHighlight()
+        end
+    end
+})
+
+-- Добавляем слайдер для прозрачности обводки
+FriendHighlightPopup:Slider({
+    name = "Outline Transparency",
+    min = 0,
+    max = 1,
+    default = 0,
+    float = 0.01,
+    flag = "friend_highlight_outline_transparency",
+    callback = function(value)
+        HighlightChamsConfig.Friend.OutlineTransparency = value
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Friend.Enabled and Library.Flags["visual_highlightchams"] then
+            applyFriendHighlight()
+        end
+    end
+})
+
+-- Добавляем колорпикер для цвета заливки
+FriendHighlightPopup:Colorpicker({
+    name = "Fill Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "friend_highlight_fill_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            HighlightChamsConfig.Friend.FillColor = color.c
+        else
+            HighlightChamsConfig.Friend.FillColor = color
+        end
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Friend.Enabled and Library.Flags["visual_highlightchams"] then
+            applyFriendHighlight()
+        end
+    end
+})
+
+-- Добавляем колорпикер для цвета обводки
+FriendHighlightPopup:Colorpicker({
+    name = "Outline Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "friend_highlight_outline_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            HighlightChamsConfig.Friend.OutlineColor = color.c
+        else
+            HighlightChamsConfig.Friend.OutlineColor = color
+        end
+        
+        -- Если включено, сразу применяем
+        if HighlightChamsConfig.Friend.Enabled and Library.Flags["visual_highlightchams"] then
+            applyFriendHighlight()
+        end
+    end
+})
+
+-- Обновление списка игроков при входе нового игрока
+game:GetService("Players").PlayerAdded:Connect(function(player)
+    if player ~= game:GetService("Players").LocalPlayer then
+        table.insert(playersList, player.Name)
+        PlayersListBox:Refresh(playersList)
+    end
+end)
+
+-- Обновление списка игроков при выходе игрока
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+    for i, name in pairs(playersList) do
+        if name == player.Name then
+            table.remove(playersList, i)
+            break
+        end
+    end
+    PlayersListBox:Refresh(playersList)
+end)
+
+-- Добавляем кнопку Add Friend
+FriendChamsPopup:Button({
+    name = "Add Friend",
+    callback = function()
+        if FriendChamsPopup.selectedPlayer then
+            MaterialChamsConfig.Friend.Friends[FriendChamsPopup.selectedPlayer] = true
+            saveFriends()
+            
+            -- Если включен Friend Chams, применяем к новому другу
+            if MaterialChamsConfig.Friend.Enabled then
+                applyFriendChams()
+            end
+            
+            -- Если включен Other Chams, обновляем его, чтобы исключить нового друга
+            if MaterialChamsConfig.Other.Enabled then
+                applyOtherChams()
+            end
+        end
+    end
+})
+
+-- Добавляем кнопку Remove Friend
+FriendChamsPopup:Button({
+    name = "Remove Friend",
+    callback = function()
+        if FriendChamsPopup.selectedPlayer and MaterialChamsConfig.Friend.Friends[FriendChamsPopup.selectedPlayer] then
+            MaterialChamsConfig.Friend.Friends[FriendChamsPopup.selectedPlayer] = nil
+            saveFriends()
+            
+            -- Если включен Other Chams, обновляем его, чтобы включить бывшего друга
+            if MaterialChamsConfig.Other.Enabled then
+                applyOtherChams()
+            end
+        end
+    end
+})
 
 -- Создаем секцию Main во вкладке Player
 PlayerMainSection = PlayerTab:Section({name = "Main", description = ">_<"})
@@ -1961,7 +3531,11 @@ o.ConfigSection:Button({
         if not isfolder(o.ConfigFolder) then makefolder(o.ConfigFolder) end
         o.common_vars.path = o.ConfigFolder.."/"..o.common_vars.configName..".cfg"
         writefile(o.common_vars.path, Library:GetConfig())
-        o.ConfigList.Refresh(GetConfigFiles())
+        if type(o.ConfigList.Refresh) == "function" then
+            o.ConfigList:Refresh(GetConfigFiles())
+        else
+            o.ConfigList.Refresh(GetConfigFiles())
+        end
     end
 })
 
@@ -1978,7 +3552,11 @@ o.ConfigSection:Button({
         if isfile(o.common_vars.path) then
             Library.LoadConfig(readfile(o.common_vars.path))
         else
-            o.ConfigList.Refresh(GetConfigFiles())
+            if type(o.ConfigList.Refresh) == "function" then
+                o.ConfigList:Refresh(GetConfigFiles())
+            else
+                o.ConfigList.Refresh(GetConfigFiles())
+            end
         end
     end
 })
@@ -1995,9 +3573,17 @@ o.ConfigSection:Button({
         o.common_vars.path = o.ConfigFolder.."/"..o.common_vars.configName..".cfg"
         if isfile(o.common_vars.path) then
             delfile(o.common_vars.path)
-            o.ConfigList.Refresh(GetConfigFiles())
+            if type(o.ConfigList.Refresh) == "function" then
+                o.ConfigList:Refresh(GetConfigFiles())
+            else
+                o.ConfigList.Refresh(GetConfigFiles())
+            end
         else
-            o.ConfigList.Refresh(GetConfigFiles())
+            if type(o.ConfigList.Refresh) == "function" then
+                o.ConfigList:Refresh(GetConfigFiles())
+            else
+                o.ConfigList.Refresh(GetConfigFiles())
+            end
         end
     end
 })
@@ -2061,7 +3647,7 @@ function CreateWatermark(enabled)
     
     o.watermarkFrame.Name = "WaterMark"
     o.watermarkFrame.Parent = o.watermarkGui
-    o.watermarkFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
+    o.watermarkFrame.BackgroundColor3 = Color3.fromRGB(26, 25, 25)
     o.watermarkFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
     o.watermarkFrame.BorderSizePixel = 0
     o.watermarkFrame.Position = UDim2.new(0.09700948, 0, 0.107579462, 0)
@@ -2196,7 +3782,11 @@ LegitBotTab.Set(true)
 spawn(function()
     while task.wait(5) do
         if Window.Visible then
-            o.ConfigList.Refresh(GetConfigFiles())
+            if type(o.ConfigList.Refresh) == "function" then
+                o.ConfigList:Refresh(GetConfigFiles())
+            else
+                o.ConfigList.Refresh(GetConfigFiles())
+            end
         end
     end
 end)
@@ -2233,7 +3823,7 @@ o.misc.auto_armor = function()
                 o.misc.buying_armor = nil
             end
         end
-    elseif o.common_vars.placeId == 71189885129233 then
+    elseif tostring(o.common_vars.placeId) == "71189885129233" then
         -- Вторая игра - проверяем DataFolder.Information.Armor
         if o.lp:FindFirstChild("DataFolder") and o.lp.DataFolder:FindFirstChild("Information") and o.lp.DataFolder.Information:FindFirstChild("Armor") then
             o.common_vars.armorValue = tonumber(o.lp.DataFolder.Information.Armor.Value) or 0
@@ -2305,7 +3895,8 @@ o.autoBuy = {
     originalPosition = nil,
     placeItems = {
         [2788229376] = {"[LMG] - $4098", "[Rifle] - $1694", "[AUG] - $2131"},
-        [71189885129233] = {"[AK47]"}
+        -- Используем строку для большого числа
+        ["71189885129233"] = {"[AK47]"}
     },
     buyAmmo = false,
     ammoList = {
@@ -2356,7 +3947,10 @@ end
 -- Инициализация списка предметов в зависимости от placeId
 o.autoBuy.initializeItems = function()
     local placeId = game.PlaceId
-    o.autoBuy.itemsList = o.autoBuy.placeItems[placeId] or o.autoBuy.placeItems[2788229376] -- Используем стандартный список, если placeId не найден
+    local placeIdStr = tostring(placeId)
+    
+    -- Проверяем сначала числовой ключ, затем строковый
+    o.autoBuy.itemsList = o.autoBuy.placeItems[placeId] or o.autoBuy.placeItems[placeIdStr] or o.autoBuy.placeItems[2788229376]
     
     -- Устанавливаем первый предмет как выбранный по умолчанию
     if #o.autoBuy.itemsList > 0 then
@@ -2621,7 +4215,7 @@ o.AutoBuyPopup:Dropdown({
 })
 
 -- Добавлять ammo только если не 71189885129233
-if game.PlaceId ~= 71189885129233 then
+if tostring(game.PlaceId) ~= "71189885129233" then
     -- Добавляем тогл для включения/выключения автопокупки патронов
     o.AutoBuyPopup:Toggle({
         name = "Auto Buy Ammo",
@@ -2925,7 +4519,12 @@ function UpdatePlayerList()
     o.common_vars.playerNames = {}
     for _, player in pairs(o.plrs:GetPlayers()) do
         if player ~= o.lp then
-            table.insert(o.common_vars.playerNames, player.Name)
+            -- Проверка, что player.Name это строка
+            local playerName = player.Name
+            if type(playerName) ~= "string" then
+                playerName = tostring(playerName)
+            end
+            table.insert(o.common_vars.playerNames, playerName)
         end
     end
     return o.common_vars.playerNames
@@ -2946,17 +4545,43 @@ o.PlayersList = PlayerActionsSection:List({
     end
 })
 
+-- Сохраняем оригинальную функцию Refresh
+if o.PlayersList then
+    if type(o.PlayersList.Refresh) == "function" then
+        -- Если Refresh уже функция, сохраняем её
+        o.originalRefresh = o.PlayersList.Refresh
+    else
+        -- Если Refresh не функция, создаём обёртку
+        o.originalRefresh = function(values)
+            o.PlayersList.Refresh(values)
+        end
+    end
+    
+    -- Переопределяем функцию Refresh для безопасного вызова
+    o.PlayersList.Refresh = function(values)
+        if type(o.originalRefresh) == "function" then
+            o.originalRefresh(values)
+        end
+    end
+end
+
 -- Функция для обновления списка игроков при входе/выходе
 o.plrs.PlayerAdded:Connect(function(player)
     if player ~= o.lp then
         o.playerList = UpdatePlayerList()
-        o.PlayersList.Refresh(o.playerList)
+        if o.PlayersList and o.PlayersList.Refresh then
+            -- Используем нашу безопасную функцию Refresh
+            o.PlayersList.Refresh(o.playerList)
+        end
     end
 end)
 
 o.plrs.PlayerRemoving:Connect(function()
     o.playerList = UpdatePlayerList()
-    o.PlayersList.Refresh(o.playerList)
+    if o.PlayersList and o.PlayersList.Refresh then
+        -- Используем нашу безопасную функцию Refresh
+        o.PlayersList.Refresh(o.playerList)
+    end
 end)
 
 -- Добавляем кнопку View (наблюдение за игроком)
@@ -3013,6 +4638,73 @@ PlayerActionsSection:Button({
         if o.selectedPlayer and o.selectedPlayer.Character and o.lp.Character then
             -- Телепортируемся к игроку
             o.lp.Character.HumanoidRootPart.CFrame = o.selectedPlayer.Character.HumanoidRootPart.CFrame
+        end
+    end
+})
+
+-- Добавляем кнопку Add Friend (добавление игрока в друзья)
+PlayerActionsSection:Button({
+    name = "Add Friend",
+    callback = function()
+        if o.selectedPlayer then
+            -- Добавляем игрока в список друзей
+            MaterialChamsConfig.Friend.Friends[o.selectedPlayer.Name] = true
+            saveFriends()
+            
+            -- Если включен Friend Chams, применяем к новому другу
+            if MaterialChamsConfig.Friend.Enabled and Library.Flags["visual_materialchams"] then
+                applyFriendChams()
+            end
+            
+            -- Если включен Friend Highlight, применяем к новому другу
+            if HighlightChamsConfig.Friend.Enabled and Library.Flags["visual_highlightchams"] then
+                -- Убедимся, что Friends инициализирован
+                if not HighlightChamsConfig.Friend.Friends then
+                    HighlightChamsConfig.Friend.Friends = {}
+                end
+                applyFriendHighlight()
+            end
+            
+            -- Если включен Other Chams или Other Highlight, обновляем их, чтобы исключить нового друга
+            if MaterialChamsConfig.Other.Enabled and Library.Flags["visual_materialchams"] then
+                applyOtherChams()
+            end
+            
+            if HighlightChamsConfig.Other.Enabled and Library.Flags["visual_highlightchams"] then
+                applyOtherHighlight()
+            end
+        end
+    end
+})
+
+-- Добавляем кнопку Remove Friend (удаление игрока из друзей)
+PlayerActionsSection:Button({
+    name = "Remove Friend",
+    callback = function()
+        if o.selectedPlayer and MaterialChamsConfig.Friend.Friends[o.selectedPlayer.Name] then
+            -- Удаляем игрока из списка друзей
+            MaterialChamsConfig.Friend.Friends[o.selectedPlayer.Name] = nil
+            saveFriends()
+            
+            -- Если включен Other Chams или Other Highlight, обновляем их, чтобы включить бывшего друга
+            if MaterialChamsConfig.Other.Enabled and Library.Flags["visual_materialchams"] then
+                applyOtherChams()
+            end
+            
+            if HighlightChamsConfig.Other.Enabled and Library.Flags["visual_highlightchams"] then
+                applyOtherHighlight()
+            end
+            
+            -- Удаляем хайлайт друга, если он существует
+            local friendData = HighlightChamsConfig.Friend.Friends and HighlightChamsConfig.Friend.Friends[o.selectedPlayer.Name]
+            if friendData then
+                if friendData.Highlight and friendData.Highlight:IsA("Highlight") then
+                    pcall(function()
+                        friendData.Highlight:Destroy()
+                    end)
+                end
+                HighlightChamsConfig.Friend.Friends[o.selectedPlayer.Name] = nil
+            end
         end
     end
 })
@@ -3110,3 +4802,657 @@ ExtraSection:Toggle({
         end
     end
 })
+
+-- Создаем секцию World во вкладке Misc (справа)
+o.WorldSection = MiscTab:Section({name = "World", description = ">_<", side = "right"})
+
+-- Добавляем тогл Fog с попапом
+o.FogToggle = o.WorldSection:Toggle({
+    name = "Fog",
+    default = false,
+    flag = "world_fog",
+    callback = function(value)
+        if value then
+            -- Сохраняем оригинальные настройки тумана
+            if not o.originalFogSettings then
+                o.originalFogSettings = {
+                    FogStart = o.LS.FogStart,
+                    FogEnd = o.LS.FogEnd,
+                    FogColor = o.LS.FogColor
+                }
+            end
+            
+            -- Применяем настройки тумана
+            o.LS.FogStart = Library.Flags["fog_start"] or 0
+            o.LS.FogEnd = Library.Flags["fog_end"] or 1000
+            if Library.Flags["fog_color"] then
+                if type(Library.Flags["fog_color"]) == "table" and Library.Flags["fog_color"].c then
+                    o.LS.FogColor = Library.Flags["fog_color"].c
+                else
+                    o.LS.FogColor = Library.Flags["fog_color"]
+                end
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalFogSettings then
+                o.LS.FogStart = o.originalFogSettings.FogStart
+                o.LS.FogEnd = o.originalFogSettings.FogEnd
+                o.LS.FogColor = o.originalFogSettings.FogColor
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек тумана
+o.FogPopup = o.FogToggle:Popup({size = 200})
+
+-- Добавляем слайдер для начала тумана
+o.FogPopup:Slider({
+    name = "FogStart",
+    min = 0,
+    max = 1000,
+    default = 0,
+    float = 1,
+    flag = "fog_start",
+    callback = function(value)
+        if Library.Flags["world_fog"] then
+            o.LS.FogStart = value
+        end
+    end
+})
+
+-- Добавляем слайдер для конца тумана
+o.FogPopup:Slider({
+    name = "FogEnd",
+    min = 0,
+    max = 10000,
+    default = 1000,
+    float = 1,
+    flag = "fog_end",
+    callback = function(value)
+        if Library.Flags["world_fog"] then
+            o.LS.FogEnd = value
+        end
+    end
+})
+
+-- Добавляем колорпикер для цвета тумана
+o.FogPopup:Colorpicker({
+    name = "FogColor",
+    description = ">_<",
+    default = Color3.fromRGB(192, 192, 192),
+    flag = "fog_color",
+    callback = function(color)
+        if Library.Flags["world_fog"] then
+            if type(color) == "table" and color.c then
+                o.LS.FogColor = color.c
+            else
+                o.LS.FogColor = color
+            end
+        end
+    end
+})
+
+-- Добавляем тогл Bloom с попапом
+o.BloomToggle = o.WorldSection:Toggle({
+    name = "Bloom",
+    default = false,
+    flag = "world_bloom",
+    callback = function(value)
+        -- Проверяем, существует ли эффект Bloom
+        o.common_vars.bloomEffect = o.LS:FindFirstChild("Bloom")
+        
+        if value then
+            -- Создаем эффект Bloom, если его нет
+            if not o.common_vars.bloomEffect then
+                o.common_vars.bloomEffect = Instance.new("BloomEffect")
+                o.common_vars.bloomEffect.Name = "Bloom"
+                o.common_vars.bloomEffect.Parent = o.LS
+            end
+            
+            -- Применяем настройки Bloom
+            o.common_vars.bloomEffect.Intensity = Library.Flags["bloom_intensity"] or 0
+            o.common_vars.bloomEffect.Size = Library.Flags["bloom_size"] or 0
+            o.common_vars.bloomEffect.Threshold = Library.Flags["bloom_threshold"] or 0
+            o.common_vars.bloomEffect.Enabled = true
+        else
+            -- Отключаем эффект Bloom
+            if o.common_vars.bloomEffect then
+                o.common_vars.bloomEffect.Enabled = false
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек Bloom
+o.BloomPopup = o.BloomToggle:Popup({size = 200})
+
+-- Добавляем слайдер для интенсивности Bloom
+o.BloomPopup:Slider({
+    name = "Intensity",
+    min = 0,
+    max = 5,
+    default = 0,
+    float = 0.01,
+    flag = "bloom_intensity",
+    callback = function(value)
+        o.common_vars.bloomEffect = o.LS:FindFirstChild("Bloom")
+        if Library.Flags["world_bloom"] and o.common_vars.bloomEffect then
+            o.common_vars.bloomEffect.Intensity = value
+        end
+    end
+})
+
+-- Добавляем слайдер для размера Bloom
+o.BloomPopup:Slider({
+    name = "Size",
+    min = 0,
+    max = 50,
+    default = 0,
+    float = 0.01,
+    flag = "bloom_size",
+    callback = function(value)
+        o.common_vars.bloomEffect = o.LS:FindFirstChild("Bloom")
+        if Library.Flags["world_bloom"] and o.common_vars.bloomEffect then
+            o.common_vars.bloomEffect.Size = value
+        end
+    end
+})
+
+-- Добавляем слайдер для порога Bloom
+o.BloomPopup:Slider({
+    name = "Threshold",
+    min = 0,
+    max = 10,
+    default = 0,
+    float = 0.01,
+    flag = "bloom_threshold",
+    callback = function(value)
+        o.common_vars.bloomEffect = o.LS:FindFirstChild("Bloom")
+        if Library.Flags["world_bloom"] and o.common_vars.bloomEffect then
+            o.common_vars.bloomEffect.Threshold = value
+        end
+    end
+})
+
+-- Добавляем тогл ColorCorrection с попапом
+o.ColorCorrectionToggle = o.WorldSection:Toggle({
+    name = "ColorCorrection",
+    default = false,
+    flag = "world_colorcorrection",
+    callback = function(value)
+        -- Проверяем, существует ли эффект ColorCorrection
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        
+        if value then
+            -- Создаем эффект ColorCorrection, если его нет
+            if not o.common_vars.colorEffect then
+                o.common_vars.colorEffect = Instance.new("ColorCorrectionEffect")
+                o.common_vars.colorEffect.Name = "ColorCorrection"
+                o.common_vars.colorEffect.Parent = o.LS
+            end
+            
+            -- Применяем настройки ColorCorrection
+            o.common_vars.colorEffect.Brightness = Library.Flags["cc_brightness"] or 0
+            o.common_vars.colorEffect.Contrast = Library.Flags["cc_contrast"] or 0
+            o.common_vars.colorEffect.Saturation = Library.Flags["cc_saturation"] or 0
+            
+            if Library.Flags["cc_tint"] then
+                if type(Library.Flags["cc_tint"]) == "table" and Library.Flags["cc_tint"].c then
+                    o.common_vars.colorEffect.TintColor = Library.Flags["cc_tint"].c
+                else
+                    o.common_vars.colorEffect.TintColor = Library.Flags["cc_tint"]
+                end
+            end
+            
+            o.common_vars.colorEffect.Enabled = true
+        else
+            -- Отключаем эффект ColorCorrection
+            if o.common_vars.colorEffect then
+                o.common_vars.colorEffect.Enabled = false
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек ColorCorrection
+o.ColorCorrectionPopup = o.ColorCorrectionToggle:Popup({size = 200})
+
+-- Добавляем слайдер для яркости
+o.ColorCorrectionPopup:Slider({
+    name = "Brightness",
+    min = -1,
+    max = 1,
+    default = 0,
+    float = 0.05,
+    flag = "cc_brightness",
+    callback = function(value)
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        if Library.Flags["world_colorcorrection"] and o.common_vars.colorEffect then
+            o.common_vars.colorEffect.Brightness = value
+        end
+    end
+})
+
+-- Добавляем слайдер для контраста
+o.ColorCorrectionPopup:Slider({
+    name = "Contrast",
+    min = -1,
+    max = 1,
+    default = 0,
+    float = 0.05,
+    flag = "cc_contrast",
+    callback = function(value)
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        if Library.Flags["world_colorcorrection"] and o.common_vars.colorEffect then
+            o.common_vars.colorEffect.Contrast = value
+        end
+    end
+})
+
+-- Добавляем слайдер для насыщенности
+o.ColorCorrectionPopup:Slider({
+    name = "Saturation",
+    min = -1,
+    max = 1,
+    default = 0,
+    float = 0.05,
+    flag = "cc_saturation",
+    callback = function(value)
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        if Library.Flags["world_colorcorrection"] and o.common_vars.colorEffect then
+            o.common_vars.colorEffect.Saturation = value
+        end
+    end
+})
+
+-- Добавляем колорпикер для оттенка (TintColor - это цветовой фильтр, который накладывается на изображение)
+o.ColorCorrectionPopup:Colorpicker({
+    name = "TintColor",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255), -- Белый цвет не меняет изображение
+    flag = "cc_tint",
+    callback = function(color)
+        o.common_vars.colorEffect = o.LS:FindFirstChild("ColorCorrection")
+        if Library.Flags["world_colorcorrection"] and o.common_vars.colorEffect then
+            if type(color) == "table" and color.c then
+                o.common_vars.colorEffect.TintColor = color.c
+            else
+                o.common_vars.colorEffect.TintColor = color
+            end
+        end
+    end
+})
+
+-- Добавляем тогл Shadows с попапом
+o.ShadowsToggle = o.WorldSection:Toggle({
+    name = "Shadows",
+    default = false,
+    flag = "world_shadows",
+    callback = function(value)
+        -- Сохраняем оригинальные настройки теней при первом включении
+        if not o.originalShadowSettings then
+            o.originalShadowSettings = {
+                GlobalShadows = o.LS.GlobalShadows
+            }
+        end
+        
+        if value then
+            -- Применяем настройки теней из флагов
+            if Library.Flags["shadows_disable"] ~= nil then
+                o.LS.GlobalShadows = not Library.Flags["shadows_disable"]
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalShadowSettings then
+                o.LS.GlobalShadows = o.originalShadowSettings.GlobalShadows
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек теней
+o.ShadowsPopup = o.ShadowsToggle:Popup({size = 150})
+
+-- Добавляем тогл для отключения теней
+o.ShadowsPopup:Toggle({
+    name = "DisableShadows",
+    default = false,
+    flag = "shadows_disable",
+    callback = function(value)
+        if Library.Flags["world_shadows"] then
+            o.LS.GlobalShadows = not value
+        end
+    end
+})
+
+-- Добавляем тогл Ambient с попапом
+o.AmbientToggle = o.WorldSection:Toggle({
+    name = "Ambient",
+    default = false,
+    flag = "world_ambient",
+    callback = function(value)
+        -- Сохраняем оригинальные настройки окружающего света при первом включении
+        if not o.originalAmbientSettings then
+            o.originalAmbientSettings = {
+                Ambient = o.LS.Ambient
+            }
+        end
+        
+        if value then
+            -- Применяем настройки окружающего света из флагов
+            if Library.Flags["ambient_color"] then
+                if type(Library.Flags["ambient_color"]) == "table" and Library.Flags["ambient_color"].c then
+                    o.LS.Ambient = Library.Flags["ambient_color"].c
+                else
+                    o.LS.Ambient = Library.Flags["ambient_color"]
+                end
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalAmbientSettings then
+                o.LS.Ambient = o.originalAmbientSettings.Ambient
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек окружающего света
+o.AmbientPopup = o.AmbientToggle:Popup({size = 150})
+
+-- Добавляем колорпикер для цвета окружающего света
+o.AmbientPopup:Colorpicker({
+    name = "AmbientColor",
+    description = ">_<",
+    default = Color3.fromRGB(0, 0, 0),
+    flag = "ambient_color",
+    callback = function(color)
+        if Library.Flags["world_ambient"] then
+            if type(color) == "table" and color.c then
+                o.LS.Ambient = color.c
+            else
+                o.LS.Ambient = color
+            end
+        end
+    end
+})
+
+-- Добавляем тогл ClockTime с попапом
+o.ClockTimeToggle = o.WorldSection:Toggle({
+    name = "ClockTime",
+    default = false,
+    flag = "world_clocktime",
+    callback = function(value)
+        -- Сохраняем оригинальные настройки времени при первом включении
+        if not o.originalTimeSettings then
+            o.originalTimeSettings = {
+                ClockTime = o.LS.ClockTime,
+                TimeOfDay = o.LS.TimeOfDay
+            }
+        end
+        
+        if value then
+            -- Применяем настройки времени из флагов
+            o.LS.ClockTime = Library.Flags["clocktime_value"] or 0
+            
+            -- Создаем соединение для обновления времени
+            if not o.clockTimeConnection then
+                o.clockTimeConnection = o.rs.Heartbeat:Connect(function()
+                    if Library.Flags["world_clocktime"] and o.LS.ClockTime ~= Library.Flags["clocktime_value"] then
+                        o.LS.ClockTime = Library.Flags["clocktime_value"] or 14
+                    end
+                end)
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalTimeSettings then
+                o.LS.ClockTime = o.originalTimeSettings.ClockTime
+                o.LS.TimeOfDay = o.originalTimeSettings.TimeOfDay
+            end
+            
+            -- Отключаем соединение
+            if o.clockTimeConnection then
+                o.clockTimeConnection:Disconnect()
+                o.clockTimeConnection = nil
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек времени
+o.ClockTimePopup = o.ClockTimeToggle:Popup({size = 150})
+
+-- Добавляем слайдер для времени
+o.ClockTimePopup:Slider({
+    name = "Time",
+    min = 0,
+    max = 24,
+    default = 0,
+    float = 0.1,
+    flag = "clocktime_value",
+    callback = function(value)
+        if Library.Flags["world_clocktime"] then
+            o.LS.ClockTime = value
+        end
+    end
+})
+
+-- Добавляем тогл LightingType с попапом
+o.LightingTypeToggle = o.WorldSection:Toggle({
+    name = "LightingType",
+    default = false,
+    flag = "world_lightingtype",
+    callback = function(value)
+        -- Сохраняем оригинальные настройки типа освещения при первом включении
+        if not o.originalLightingTypeSettings then
+            o.originalLightingTypeSettings = {
+                Technology = o.LS.Technology
+            }
+        end
+        
+        if value then
+            -- Применяем настройки типа освещения из флагов
+            o.common_vars.lightingType = Library.Flags["lightingtype_value"]
+            
+            if o.common_vars.lightingType == "Voxel" then
+                o.LS.Technology = Enum.Technology.Voxel
+            elseif o.common_vars.lightingType == "Legacy" then
+                o.LS.Technology = Enum.Technology.Legacy
+            elseif o.common_vars.lightingType == "ShadowMap" then
+                o.LS.Technology = Enum.Technology.ShadowMap
+            elseif o.common_vars.lightingType == "Future" then
+                o.LS.Technology = Enum.Technology.Future
+            end
+        else
+            -- Восстанавливаем оригинальные настройки
+            if o.originalLightingTypeSettings then
+                o.LS.Technology = o.originalLightingTypeSettings.Technology
+            end
+        end
+    end
+})
+
+-- Создаем попап для настроек типа освещения
+o.LightingTypePopup = o.LightingTypeToggle:Popup({size = 150})
+
+-- Добавляем выпадающий список для типа освещения
+o.LightingTypePopup:Dropdown({
+    name = "Type",
+    values = {"Voxel", "Legacy", "ShadowMap", "Future"},
+    value = "Voxel",
+    flag = "lightingtype_value",
+    callback = function(value)
+        if Library.Flags["world_lightingtype"] then
+            if value == "Voxel" then
+                o.LS.Technology = Enum.Technology.Voxel
+            elseif value == "Legacy" then
+                o.LS.Technology = Enum.Technology.Legacy
+            elseif value == "ShadowMap" then
+                o.LS.Technology = Enum.Technology.ShadowMap
+            elseif value == "Future" then
+                o.LS.Technology = Enum.Technology.Future
+            end
+        end
+    end
+})
+
+-- WalkSpeed и JumpPower settings
+local moveSettings = {
+    WalkSpeedEnabled = false,
+    WalkSpeed = 16,
+    JumpPowerEnabled = false,
+    JumpPower = 50,
+}
+
+-- Добавляем хук метатаблицы для WalkSpeed и JumpPower
+local mt = getrawmetatable(game)
+local oldIndex = mt.__index
+local oldNewIndex = mt.__newindex
+setreadonly(mt, false)
+
+mt.__newindex = newcclosure(function(self, key, value)
+    -- Проверка на WalkSpeed
+    if key == "WalkSpeed" and moveSettings.WalkSpeedEnabled and self:IsA("Humanoid") then
+        -- Если значение меньше установленного в настройках, заменяем его
+        if value < moveSettings.WalkSpeed then
+            value = moveSettings.WalkSpeed
+        end
+    end
+    
+    -- Проверка на JumpPower
+    if key == "JumpPower" and moveSettings.JumpPowerEnabled and self:IsA("Humanoid") then
+        -- Если значение меньше установленного в настройках, заменяем его
+        if value < moveSettings.JumpPower then
+            value = moveSettings.JumpPower
+        end
+    end
+    
+    return oldNewIndex(self, key, value)
+end)
+
+setreadonly(mt, true)
+
+-- Добавляем WalkSpeed и JumpPower только для первой игры (не 71189885129233)
+if game.PlaceId ~= 71189885129233 and tostring(game.PlaceId) ~= "71189885129233" then
+    -- Добавляем WalkSpeed toggle в секцию движения
+    local WalkSpeedToggle = PlayerMovementSection:Toggle({
+        name = "WalkSpeed",
+        default = false,
+        flag = "player_walkspeed",
+        callback = function(v)
+            moveSettings.WalkSpeedEnabled = v
+            
+            -- Обновляем WalkSpeed для текущего персонажа
+            if o.lp.Character and o.lp.Character:FindFirstChildOfClass("Humanoid") then
+                local humanoid = o.lp.Character:FindFirstChildOfClass("Humanoid")
+                if v then
+                    humanoid.WalkSpeed = moveSettings.WalkSpeed
+                else
+                    humanoid.WalkSpeed = 16 -- Стандартное значение
+                end
+            end
+        end
+    })
+
+    local WalkSpeedPopup = WalkSpeedToggle:Popup({size = 150})
+    WalkSpeedPopup:Slider({
+        name = "Speed",
+        min = 16,
+        max = 120,
+        default = 16,
+        float = 1,
+        flag = "player_walkspeed_amount",
+        callback = function(v)
+            moveSettings.WalkSpeed = v
+            
+            -- Обновляем WalkSpeed для текущего персонажа если включен тогл
+            if moveSettings.WalkSpeedEnabled and o.lp.Character and o.lp.Character:FindFirstChildOfClass("Humanoid") then
+                o.lp.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = v
+            end
+        end
+    })
+
+    -- Добавляем JumpPower toggle в секцию движения
+    local JumpPowerToggle = PlayerMovementSection:Toggle({
+        name = "Jump Power",
+        default = false,
+        flag = "player_jumppower",
+        callback = function(v)
+            moveSettings.JumpPowerEnabled = v
+            
+            -- Обновляем JumpPower для текущего персонажа
+            if o.lp.Character and o.lp.Character:FindFirstChildOfClass("Humanoid") then
+                local humanoid = o.lp.Character:FindFirstChildOfClass("Humanoid")
+                if v then
+                    humanoid.JumpPower = moveSettings.JumpPower
+                else
+                    humanoid.JumpPower = 50 -- Стандартное значение
+                end
+            end
+        end
+    })
+
+    local JumpPowerPopup = JumpPowerToggle:Popup({size = 150})
+    JumpPowerPopup:Slider({
+        name = "Power",
+        min = 30,
+        max = 200,
+        default = 50,
+        float = 1,
+        flag = "player_jumppower_amount",
+        callback = function(v)
+            moveSettings.JumpPower = v
+            
+            -- Обновляем JumpPower для текущего персонажа если включен тогл
+            if moveSettings.JumpPowerEnabled and o.lp.Character and o.lp.Character:FindFirstChildOfClass("Humanoid") then
+                o.lp.Character:FindFirstChildOfClass("Humanoid").JumpPower = v
+            end
+        end
+    })
+end
+
+-- Anti-Inertia
+local AntiInertiaSettings = {
+    Speed = {
+        Ground = 0.3,
+        Air = 0.3
+    },
+    NoInertia = true
+}
+
+PlayerMovementSection:Toggle({
+    name = "Anti Inertia",
+    default = false,
+    flag = "player_anti_inertia"
+})
+
+o.rs.Heartbeat:Connect(function()
+    if not Library.Flags["player_anti_inertia"] then return end
+    
+    local character = o.lp.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    local rootPart = character.HumanoidRootPart
+    local moveDir = humanoid.MoveDirection
+    
+    if moveDir.Magnitude > 0 then
+        local speedMult = (humanoid:GetState() == Enum.HumanoidStateType.Freefall or humanoid:GetState() == Enum.HumanoidStateType.Jumping)
+            and AntiInertiaSettings.Speed.Air or AntiInertiaSettings.Speed.Ground
+        local newVel = moveDir * speedMult * 50
+        if AntiInertiaSettings.NoInertia then
+            rootPart.Velocity = Vector3.new(newVel.X, rootPart.Velocity.Y, newVel.Z)
+        else
+            local curVel = rootPart.Velocity
+            rootPart.Velocity = Vector3.new(
+                curVel.X + (newVel.X - curVel.X) * 0.5,
+                rootPart.Velocity.Y,
+                curVel.Z + (newVel.Z - curVel.Z) * 0.5
+            )
+        end
+    elseif AntiInertiaSettings.NoInertia then
+        rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0)
+    end
+end)
