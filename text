@@ -2299,6 +2299,7 @@ local Env = getgenv()
                 Objects.Background = Utility.New("TextButton", {
                     Name = "Background",
                     Size = UDim2.new(1, -2, 1, -2),
+                    Position = UDim2.fromOffset(1, 1),
                     --AutomaticSize = Enum.AutomaticSize.Y,
                     Text = "",
                     AutoButtonColor = false,
@@ -2346,32 +2347,33 @@ local Env = getgenv()
                 Popup.Holder = Objects.Holder
             end; Popup.ZIndex = ZIndex
 
-            function Popup.Visible(visibility, position)
-                if Popup.Tweening then
-                    return
-                end
+                function Popup.Visible(visibility, position, stopPropagation)
+        if Popup.Tweening then
+            return
+        end
 
-                Popup.Tweening = true
+        Popup.Tweening = true
 
-                if visibility then
-                    Objects.Outline.Visible = true
-                    
-                    -- Закрываем только соседние попапы (одного родителя)
-                    if Popup.ParentPopup then
-                        for _, childPopup in pairs(Popup.ParentPopup.ChildPopups) do
-                            if childPopup ~= Popup and childPopup.Objects.Outline.Visible then
-                                childPopup.Visible(false)
-                            end
-                        end
-                    else
-                        -- Если это корневой popup, закрываем только другие корневые popups
-                        for _, popup in pairs(Library.Popups) do
-                            if popup ~= Popup and popup.Objects.Outline.Visible and not popup.ParentPopup then
-                                popup.Visible(false)
-                            end
-                        end
+        if visibility then
+            Objects.Outline.Visible = true
+            
+            -- Закрываем только popups одного родителя и того же уровня вложенности
+            -- Не трогаем popups из других ветвей иерархии
+            if Popup.ParentPopup and Popup.ParentElement and not stopPropagation then
+                for _, childPopup in pairs(Popup.ParentPopup.ChildPopups) do
+                    if childPopup ~= Popup and childPopup.Objects.Outline.Visible and childPopup.ParentElement == Popup.ParentElement then
+                        childPopup.Visible(false)
                     end
                 end
+            elseif not Popup.ParentPopup and not stopPropagation then
+                -- Если это корневой popup, закрываем только те корневые popups, которые относятся к тому же элементу
+                for _, popup in pairs(Library.Popups) do
+                    if popup ~= Popup and popup.Objects.Outline.Visible and not popup.ParentPopup and popup.ParentElement == Popup.ParentElement then
+                        popup.Visible(false)
+                    end
+                end
+            end
+        end
 
                 local ParentObjects = Objects.Outline:GetDescendants()
 
@@ -2414,8 +2416,9 @@ local Env = getgenv()
 
                     Objects.Outline.Visible = visibility
                     
-                    -- Если popup закрывается, закрываем все его дочерние popups
-                    if not visibility then
+                    -- Если popup закрывается, закрываем все его дочерние popups,
+                    -- но только если это не операция переключения в иерархии
+                    if not visibility and not stopPropagation then
                         for _, childPopup in pairs(Popup.ChildPopups) do
                             if childPopup.Objects.Outline.Visible then
                                 childPopup.Visible(false)
@@ -2526,7 +2529,9 @@ local Env = getgenv()
                     
                     -- Если курсор не внутри иконки и не внутри popup или любого вложенного popup
                     if not Utility.MouseOver(Objects.Icon, input) and not isInsideNestedPopups(Popup, input) then
-                        Popup.Visible(false, Popup.Objects.Outline.AbsolutePosition)
+                        -- При закрытии из-за клика вне popup разрешаем распространение закрытия
+                        local stopPropagation = false
+                        Popup.Visible(false, Popup.Objects.Outline.AbsolutePosition, stopPropagation)
 
                         Library.ChangeObjectTheme(Objects.Icon, {
                             ImageColor3 = "Dark Text",
@@ -2555,7 +2560,9 @@ local Env = getgenv()
                     ImageColor3 = Cog.Visible and "Text" or "Dark Text",
                 }, true)
 
-                Popup.Visible(Cog.Visible, Position)
+                -- Важно: не закрываем родительские поп-апы при переключении
+                local stopPropagation = true
+                Popup.Visible(Cog.Visible, Position, stopPropagation)
             end))
 
             return Popup
