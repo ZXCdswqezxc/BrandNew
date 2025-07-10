@@ -1206,24 +1206,7 @@ FriendChamsPopup:Colorpicker({
     end
 })
 
--- Создаем список игроков для добавления в друзья
-local playersList = {}
-for _, player in pairs(game:GetService("Players"):GetPlayers()) do
-    if player ~= game:GetService("Players").LocalPlayer then
-        table.insert(playersList, player.Name)
-    end
-end
 
--- Добавляем список игроков
-local PlayersListBox = FriendChamsPopup:List({
-    name = "Players",
-    values = playersList,
-    flag = "friend_players_list",
-    callback = function(value)
-        -- Сохраняем выбранного игрока
-        FriendChamsPopup.selectedPlayer = value
-    end
-})
 
 -- Добавляем тогл Chams Highlights с попапом
 local HighlightChamsToggle = VisualsMainSection:Toggle({
@@ -1563,61 +1546,9 @@ FriendHighlightPopup:Colorpicker({
     end
 })
 
--- Обновление списка игроков при входе нового игрока
-game:GetService("Players").PlayerAdded:Connect(function(player)
-    if player ~= game:GetService("Players").LocalPlayer then
-        table.insert(playersList, player.Name)
-        PlayersListBox:Refresh(playersList)
-    end
-end)
 
--- Обновление списка игроков при выходе игрока
-game:GetService("Players").PlayerRemoving:Connect(function(player)
-    for i, name in pairs(playersList) do
-        if name == player.Name then
-            table.remove(playersList, i)
-            break
-        end
-    end
-    PlayersListBox:Refresh(playersList)
-end)
 
--- Добавляем кнопку Add Friend
-FriendChamsPopup:Button({
-    name = "Add Friend",
-    callback = function()
-        if FriendChamsPopup.selectedPlayer then
-            MaterialChamsConfig.Friend.Friends[FriendChamsPopup.selectedPlayer] = true
-            saveFriends()
-            
-            -- Если включен Friend Chams, применяем к новому другу
-            if MaterialChamsConfig.Friend.Enabled then
-                applyFriendChams()
-            end
-            
-            -- Если включен Other Chams, обновляем его, чтобы исключить нового друга
-            if MaterialChamsConfig.Other.Enabled then
-                applyOtherChams()
-            end
-        end
-    end
-})
 
--- Добавляем кнопку Remove Friend
-FriendChamsPopup:Button({
-    name = "Remove Friend",
-    callback = function()
-        if FriendChamsPopup.selectedPlayer and MaterialChamsConfig.Friend.Friends[FriendChamsPopup.selectedPlayer] then
-            MaterialChamsConfig.Friend.Friends[FriendChamsPopup.selectedPlayer] = nil
-            saveFriends()
-            
-            -- Если включен Other Chams, обновляем его, чтобы включить бывшего друга
-            if MaterialChamsConfig.Other.Enabled then
-                applyOtherChams()
-            end
-        end
-    end
-})
 
 -- Создаем секцию Main во вкладке Player
 PlayerMainSection = PlayerTab:Section({name = "Main", description = ">_<"})
