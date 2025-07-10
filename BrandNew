@@ -17,7 +17,7 @@ OptURL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main
 o = loadstring(game:HttpGet(OptURL))() or {}
 
 -- Загрузка UI библиотеки
-URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/ad"
+URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/cfgmanager"
 Library = loadstring(game:HttpGet(URL))()
 
 -- Примечание: Игнорируйте ошибки линтера, связанные с функциями API эксплойта, такими как:
@@ -2061,7 +2061,7 @@ function CreateWatermark(enabled)
     
     o.watermarkFrame.Name = "WaterMark"
     o.watermarkFrame.Parent = o.watermarkGui
-    o.watermarkFrame.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
+    o.watermarkFrame.BackgroundColor3 = Color3.fromRGB(26, 25, 25)
     o.watermarkFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
     o.watermarkFrame.BorderSizePixel = 0
     o.watermarkFrame.Position = UDim2.new(0.09700948, 0, 0.107579462, 0)
@@ -3607,3 +3607,164 @@ o.LightingTypePopup:Dropdown({
         end
     end
 })
+
+-- WalkSpeed и JumpPower settings
+local moveSettings = {
+    WalkSpeedEnabled = false,
+    WalkSpeed = 16,
+    JumpPowerEnabled = false,
+    JumpPower = 50,
+}
+
+-- Добавляем хук метатаблицы для WalkSpeed и JumpPower
+local mt = getrawmetatable(game)
+local oldIndex = mt.__index
+local oldNewIndex = mt.__newindex
+setreadonly(mt, false)
+
+mt.__newindex = newcclosure(function(self, key, value)
+    -- Проверка на WalkSpeed
+    if key == "WalkSpeed" and moveSettings.WalkSpeedEnabled and self:IsA("Humanoid") then
+        -- Если значение меньше установленного в настройках, заменяем его
+        if value < moveSettings.WalkSpeed then
+            value = moveSettings.WalkSpeed
+        end
+    end
+    
+    -- Проверка на JumpPower
+    if key == "JumpPower" and moveSettings.JumpPowerEnabled and self:IsA("Humanoid") then
+        -- Если значение меньше установленного в настройках, заменяем его
+        if value < moveSettings.JumpPower then
+            value = moveSettings.JumpPower
+        end
+    end
+    
+    return oldNewIndex(self, key, value)
+end)
+
+setreadonly(mt, true)
+
+-- Добавляем WalkSpeed и JumpPower только для первой игры (не 71189885129233)
+if game.PlaceId ~= 71189885129233 and tostring(game.PlaceId) ~= "71189885129233" then
+    -- Добавляем WalkSpeed toggle в секцию движения
+    local WalkSpeedToggle = PlayerMovementSection:Toggle({
+        name = "WalkSpeed",
+        default = false,
+        flag = "player_walkspeed",
+        callback = function(v)
+            moveSettings.WalkSpeedEnabled = v
+            
+            -- Обновляем WalkSpeed для текущего персонажа
+            if o.lp.Character and o.lp.Character:FindFirstChildOfClass("Humanoid") then
+                local humanoid = o.lp.Character:FindFirstChildOfClass("Humanoid")
+                if v then
+                    humanoid.WalkSpeed = moveSettings.WalkSpeed
+                else
+                    humanoid.WalkSpeed = 16 -- Стандартное значение
+                end
+            end
+        end
+    })
+
+    local WalkSpeedPopup = WalkSpeedToggle:Popup({size = 150})
+    WalkSpeedPopup:Slider({
+        name = "Speed",
+        min = 16,
+        max = 120,
+        default = 16,
+        float = 1,
+        flag = "player_walkspeed_amount",
+        callback = function(v)
+            moveSettings.WalkSpeed = v
+            
+            -- Обновляем WalkSpeed для текущего персонажа если включен тогл
+            if moveSettings.WalkSpeedEnabled and o.lp.Character and o.lp.Character:FindFirstChildOfClass("Humanoid") then
+                o.lp.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = v
+            end
+        end
+    })
+
+    -- Добавляем JumpPower toggle в секцию движения
+    local JumpPowerToggle = PlayerMovementSection:Toggle({
+        name = "Jump Power",
+        default = false,
+        flag = "player_jumppower",
+        callback = function(v)
+            moveSettings.JumpPowerEnabled = v
+            
+            -- Обновляем JumpPower для текущего персонажа
+            if o.lp.Character and o.lp.Character:FindFirstChildOfClass("Humanoid") then
+                local humanoid = o.lp.Character:FindFirstChildOfClass("Humanoid")
+                if v then
+                    humanoid.JumpPower = moveSettings.JumpPower
+                else
+                    humanoid.JumpPower = 50 -- Стандартное значение
+                end
+            end
+        end
+    })
+
+    local JumpPowerPopup = JumpPowerToggle:Popup({size = 150})
+    JumpPowerPopup:Slider({
+        name = "Power",
+        min = 30,
+        max = 200,
+        default = 50,
+        float = 1,
+        flag = "player_jumppower_amount",
+        callback = function(v)
+            moveSettings.JumpPower = v
+            
+            -- Обновляем JumpPower для текущего персонажа если включен тогл
+            if moveSettings.JumpPowerEnabled and o.lp.Character and o.lp.Character:FindFirstChildOfClass("Humanoid") then
+                o.lp.Character:FindFirstChildOfClass("Humanoid").JumpPower = v
+            end
+        end
+    })
+end
+
+-- Anti-Inertia
+local AntiInertiaSettings = {
+    Speed = {
+        Ground = 0.3,
+        Air = 0.3
+    },
+    NoInertia = true
+}
+
+PlayerMovementSection:Toggle({
+    name = "Anti Inertia",
+    default = false,
+    flag = "player_anti_inertia"
+})
+
+o.rs.Heartbeat:Connect(function()
+    if not Library.Flags["player_anti_inertia"] then return end
+    
+    local character = o.lp.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    local rootPart = character.HumanoidRootPart
+    local moveDir = humanoid.MoveDirection
+    
+    if moveDir.Magnitude > 0 then
+        local speedMult = (humanoid:GetState() == Enum.HumanoidStateType.Freefall or humanoid:GetState() == Enum.HumanoidStateType.Jumping)
+            and AntiInertiaSettings.Speed.Air or AntiInertiaSettings.Speed.Ground
+        local newVel = moveDir * speedMult * 50
+        if AntiInertiaSettings.NoInertia then
+            rootPart.Velocity = Vector3.new(newVel.X, rootPart.Velocity.Y, newVel.Z)
+        else
+            local curVel = rootPart.Velocity
+            rootPart.Velocity = Vector3.new(
+                curVel.X + (newVel.X - curVel.X) * 0.5,
+                rootPart.Velocity.Y,
+                curVel.Z + (newVel.Z - curVel.Z) * 0.5
+            )
+        end
+    elseif AntiInertiaSettings.NoInertia then
+        rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0)
+    end
+end)
