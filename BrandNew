@@ -2621,27 +2621,30 @@ AutoBuyPopup:Dropdown({
     end
 })
 
--- Добавляем тогл для включения/выключения автопокупки патронов
-AutoBuyPopup:Toggle({
-    name = "Auto Buy Ammo",
-    default = false,
-    flag = "autobuy_ammo",
-    callback = function(v)
-        o.autoBuy.buyAmmo = v
-    end
-})
+-- Добавлять ammo только если не 71189885129233
+if game.PlaceId ~= 71189885129233 then
+    -- Добавляем тогл для включения/выключения автопокупки патронов
+    AutoBuyPopup:Toggle({
+        name = "Auto Buy Ammo",
+        default = false,
+        flag = "autobuy_ammo",
+        callback = function(v)
+            o.autoBuy.buyAmmo = v
+        end
+    })
 
--- Добавляем выпадающий список для выбора типов патронов
-AutoBuyPopup:Dropdown({
-    name = "Ammo Types",
-    values = o.autoBuy.ammoList,
-    multi = true,
-    value = {},
-    flag = "autobuy_ammo_types",
-    callback = function(v)
-        o.autoBuy.selectedAmmo = v
-    end
-})
+    -- Добавляем выпадающий список для выбора типов патронов
+    AutoBuyPopup:Dropdown({
+        name = "Ammo Types",
+        values = o.autoBuy.ammoList,
+        multi = true,
+        value = {},
+        flag = "autobuy_ammo_types",
+        callback = function(v)
+            o.autoBuy.selectedAmmo = v
+        end
+    })
+end
 
 -- Добавляем функционал Multi Guns
 o.multiGuns = {
@@ -3322,205 +3325,13 @@ PlayerActionsSection:Button({
     end
 })
 
--- Добавляем кнопку Fling (подбрасывание игрока)
+-- Добавляем кнопку Teleport (телепортация к игроку)
 PlayerActionsSection:Button({
-    name = "Fling",
+    name = "Teleport",
     callback = function()
         if o.selectedPlayer and o.selectedPlayer.Character and o.lp.Character then
-            -- Сохраняем текущую позицию
-            if not getgenv().OldPos then
-                getgenv().OldPos = o.lp.Character.HumanoidRootPart.CFrame
-            end
-            
-            -- Активируем флинг
-            o.isFlingActive = true
-            
-            -- Отключаем NoClip если он активен
-            local noClipWasActive = false
-            if Library.Flags["player_nocollision"] then
-                noClipWasActive = true
-                Library.Flags["player_nocollision"] = false
-                
-                -- Восстанавливаем коллизии для всех частей
-                for _, part in pairs(o.lp.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = true
-                    end
-                end
-            end
-            
-            -- Сохраняем оригинальные настройки
-            local originalGravity = workspace.Gravity
-            local myHumanoid = o.lp.Character:FindFirstChildOfClass("Humanoid")
-            local originalJumpPower = myHumanoid and myHumanoid.JumpPower or 50
-            local originalWalkSpeed = myHumanoid and myHumanoid.WalkSpeed or 16
-            
-            -- Создаем невидимую часть для контроля
-            local controlPart = Instance.new("Part")
-            controlPart.Name = "FlingControl"
-            controlPart.Anchored = true
-            controlPart.CanCollide = false
-            controlPart.Transparency = 1
-            controlPart.Size = Vector3.new(1, 1, 1)
-            controlPart.Parent = workspace
-            
-            -- Запускаем цикл флинга
-            o.flingConnection = o.rs.Heartbeat:Connect(function()
-                if not o.isFlingActive or not o.selectedPlayer or not o.selectedPlayer.Character or not o.lp.Character then
-                    if o.flingConnection then
-                        o.flingConnection:Disconnect()
-                        o.flingConnection = nil
-                    end
-                    return
-                end
-                
-                local myRoot = o.lp.Character:FindFirstChild("HumanoidRootPart")
-                local targetRoot = o.selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local targetHumanoid = o.selectedPlayer.Character:FindFirstChildOfClass("Humanoid")
-                
-                if not myRoot or not targetRoot or not myHumanoid or not targetHumanoid then
-                    return
-                end
-                
-                -- Проверяем, сидит ли цель
-                if targetHumanoid.Sit then
-                    -- Если цель сидит, пытаемся сбить её с сиденья
-                    local targetSeat = targetHumanoid.SeatPart
-                    if targetSeat then
-                        -- Позиционируем контрольную часть рядом с сиденьем
-                        controlPart.CFrame = targetSeat.CFrame * CFrame.new(0, 3, 0)
-                    end
-                end
-                
-                -- Обновляем позицию контрольной части
-                controlPart.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 0)
-                
-                -- Увеличиваем скорость и прыжок для более эффективного флинга
-                myHumanoid.JumpPower = 70
-                myHumanoid.WalkSpeed = 26
-                
-                -- Постепенно увеличиваем скорость для меньшей заметности
-                local currentVelocity = myRoot.Velocity
-                local targetVelocity = (targetRoot.Position - myRoot.Position).Unit * 85
-                local smoothVelocity = currentVelocity:Lerp(targetVelocity, 0.25)
-                
-                -- Применяем скорость с небольшой случайностью для имитации естественного движения
-                myRoot.Velocity = smoothVelocity + Vector3.new(
-                    math.random(-10, 10),
-                    math.random(35, 65),
-                    math.random(-10, 10)
-                )
-                
-                -- Позиционируем персонажа для столкновения
-                local targetDistance = (targetRoot.Position - myRoot.Position).Magnitude
-                if targetDistance > 10 then
-                    -- Если далеко от цели, приближаемся
-                    myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 3)
-                else
-                    -- Если близко, выполняем удар сверху
-                    myRoot.CFrame = targetRoot.CFrame * CFrame.new(
-                        math.random(-2, 2),
-                        math.random(3, 5),
-                        math.random(-2, 2)
-                    )
-                    
-                    -- Имитируем прыжок для увеличения импульса
-                    myHumanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                end
-            end)
-            
-            -- Создаем таймер для остановки флинга через некоторое время
-            o.flingTimeout = task.delay(15, function()
-                -- Автоматически останавливаем флинг через 15 секунд для избежания обнаружения
-                if o.isFlingActive then
-                    o.isFlingActive = false
-                    
-                    if o.flingConnection then
-                        o.flingConnection:Disconnect()
-                        o.flingConnection = nil
-                    end
-                    
-                    -- Восстанавливаем оригинальные настройки
-                    if myHumanoid then
-                        myHumanoid.JumpPower = originalJumpPower
-                        myHumanoid.WalkSpeed = originalWalkSpeed
-                    end
-                    
-                    workspace.Gravity = originalGravity
-                    
-                    -- Удаляем контрольную часть
-                    if controlPart and controlPart.Parent then
-                        controlPart:Destroy()
-                    end
-                    
-                    -- Возвращаем персонажа на исходную позицию
-                    if getgenv().OldPos and o.lp.Character and o.lp.Character:FindFirstChild("HumanoidRootPart") then
-                        o.lp.Character.HumanoidRootPart.CFrame = getgenv().OldPos
-                        
-                        -- Обнуляем скорости всех частей
-                        for _, x in pairs(o.lp.Character:GetChildren()) do
-                            if x:IsA("BasePart") then
-                                x.Velocity = Vector3.new(0, 0, 0)
-                            end
-                        end
-                    end
-                    
-                    -- Восстанавливаем NoClip если он был активен
-                    if noClipWasActive then
-                        task.wait(0.5)
-                        Library.Flags["player_nocollision"] = true
-                    end
-                end
-            end)
-        end
-    end
-})
-
--- Добавляем кнопку Stop Fling (остановка подбрасывания)
-PlayerActionsSection:Button({
-    name = "Stop Fling",
-    callback = function()
-        -- Отключаем флинг
-        o.isFlingActive = false
-        
-        -- Отключаем соединение
-        if o.flingConnection then
-            o.flingConnection:Disconnect()
-            o.flingConnection = nil
-        end
-        
-        -- Отменяем таймер, если он активен
-        if o.flingTimeout then
-            task.cancel(o.flingTimeout)
-            o.flingTimeout = nil
-        end
-        
-        -- Удаляем контрольную часть, если она существует
-        local controlPart = workspace:FindFirstChild("FlingControl")
-        if controlPart then
-            controlPart:Destroy()
-        end
-        
-        -- Восстанавливаем настройки персонажа
-        if o.lp.Character then
-            local myHumanoid = o.lp.Character:FindFirstChildOfClass("Humanoid")
-            if myHumanoid then
-                -- Восстанавливаем стандартные значения
-                myHumanoid.JumpPower = 50
-                myHumanoid.WalkSpeed = 16
-            end
-        end
-        
-        -- Возвращаем персонажа на исходную позицию
-        if getgenv().OldPos and o.lp.Character and o.lp.Character:FindFirstChild("HumanoidRootPart") then
-            o.lp.Character.HumanoidRootPart.CFrame = getgenv().OldPos
-            
-            -- Обнуляем скорости всех частей
-            for _, x in pairs(o.lp.Character:GetChildren()) do
-                if x:IsA("BasePart") then
-                    x.Velocity = Vector3.new(0, 0, 0)
-                end
-            end
+            -- Телепортируемся к игроку
+            o.lp.Character.HumanoidRootPart.CFrame = o.selectedPlayer.Character.HumanoidRootPart.CFrame
         end
     end
 })
@@ -3615,17 +3426,6 @@ ExtraSection:Toggle({
                 o.seatsConnection:Disconnect()
                 o.seatsConnection = nil
             end
-        end
-    end
-})
-
--- Добавляем кнопку Teleport (телепортация к игроку)
-PlayerActionsSection:Button({
-    name = "Teleport",
-    callback = function()
-        if o.selectedPlayer and o.selectedPlayer.Character and o.lp.Character then
-            -- Телепортируемся к игроку
-            o.lp.Character.HumanoidRootPart.CFrame = o.selectedPlayer.Character.HumanoidRootPart.CFrame
         end
     end
 })
