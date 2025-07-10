@@ -2299,7 +2299,6 @@ local Env = getgenv()
                 Objects.Background = Utility.New("TextButton", {
                     Name = "Background",
                     Size = UDim2.new(1, -2, 1, -2),
-                    Position = UDim2.fromOffset(1, 1),
                     --AutomaticSize = Enum.AutomaticSize.Y,
                     Text = "",
                     AutoButtonColor = false,
@@ -2357,18 +2356,17 @@ local Env = getgenv()
                 if visibility then
                     Objects.Outline.Visible = true
                     
-                    -- Закрываем только popups одного родителя и того же уровня вложенности
-                    -- Не трогаем popups из других ветвей иерархии
-                    if Popup.ParentPopup and Popup.ParentElement then
+                    -- Закрываем только соседние попапы (одного родителя)
+                    if Popup.ParentPopup then
                         for _, childPopup in pairs(Popup.ParentPopup.ChildPopups) do
-                            if childPopup ~= Popup and childPopup.Objects.Outline.Visible and childPopup.ParentElement == Popup.ParentElement then
+                            if childPopup ~= Popup and childPopup.Objects.Outline.Visible then
                                 childPopup.Visible(false)
                             end
                         end
-                    elseif not Popup.ParentPopup then
-                        -- Если это корневой popup, закрываем только те корневые popups, которые относятся к тому же элементу
+                    else
+                        -- Если это корневой popup, закрываем только другие корневые popups
                         for _, popup in pairs(Library.Popups) do
-                            if popup ~= Popup and popup.Objects.Outline.Visible and not popup.ParentPopup and popup.ParentElement == Popup.ParentElement then
+                            if popup ~= Popup and popup.Objects.Outline.Visible and not popup.ParentPopup then
                                 popup.Visible(false)
                             end
                         end
