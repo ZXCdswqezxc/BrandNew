@@ -285,7 +285,7 @@ local Env = getgenv()
 --
 
 -- folders
-    local Folder = "Lumora"
+    local Folder = "BrandNew"
 
     makefolder(Folder)
 
@@ -1191,7 +1191,9 @@ local Env = getgenv()
                     )     
                 end
 
-                Popup.SetFunc(color, alpha)
+                if Popup.SetFunc and type(Popup.SetFunc) == "function" then
+                    Popup.SetFunc(color, alpha)
+                end
 
                 Objects.HuePicker.BackgroundColor3 = Color3.fromHSV(Popup.HuePos, 1, 1)
                 Objects.SaturationPicker.BackgroundColor3 = color
@@ -1531,8 +1533,11 @@ local Env = getgenv()
                     end
                 end
 
-                if Library.ColorpickerWindow.Visible then
-                    Library.ColorpickerWindow.Open()
+                -- Safely check ColorpickerWindow
+                if Library.ColorpickerWindow and type(Library.ColorpickerWindow) == "table" and Library.ColorpickerWindow.Visible then
+                    if Library.ColorpickerWindow.Open and type(Library.ColorpickerWindow.Open) == "function" then
+                        Library.ColorpickerWindow.Open()
+                    end
                 end
 
                 Window.Tweening = true
@@ -2261,6 +2266,12 @@ local Env = getgenv()
                 Objects = {},
 
                 ZIndex = self.ZIndex,
+                
+                -- Добавим новое свойство для отслеживания родительского PopupMenu
+                ParentPopup = nil,
+                
+                -- Добавим свойство для хранения вложенных PopupMenu
+                ChildPopups = {},
             }
 
             local ZIndex = Popup.ZIndex
@@ -2345,6 +2356,23 @@ local Env = getgenv()
 
                 if visibility then
                     Objects.Outline.Visible = true
+                    
+                    -- Закрываем только popups одного родителя и того же уровня вложенности
+                    -- Не трогаем popups из других ветвей иерархии
+                    if Popup.ParentPopup and Popup.ParentElement then
+                        for _, childPopup in pairs(Popup.ParentPopup.ChildPopups) do
+                            if childPopup ~= Popup and childPopup.Objects.Outline.Visible and childPopup.ParentElement == Popup.ParentElement then
+                                childPopup.Visible(false)
+                            end
+                        end
+                    elseif not Popup.ParentPopup then
+                        -- Если это корневой popup, закрываем только те корневые popups, которые относятся к тому же элементу
+                        for _, popup in pairs(Library.Popups) do
+                            if popup ~= Popup and popup.Objects.Outline.Visible and not popup.ParentPopup and popup.ParentElement == Popup.ParentElement then
+                                popup.Visible(false)
+                            end
+                        end
+                    end
                 end
 
                 local ParentObjects = Objects.Outline:GetDescendants()
@@ -2387,7 +2415,24 @@ local Env = getgenv()
                     Objects.Outline.AutomaticSize = Enum.AutomaticSize.Y
 
                     Objects.Outline.Visible = visibility
+                    
+                    -- Если popup закрывается, закрываем все его дочерние popups
+                    if not visibility then
+                        for _, childPopup in pairs(Popup.ChildPopups) do
+                            if childPopup.Objects.Outline.Visible then
+                                childPopup.Visible(false)
+                            end
+                        end
+                    end
                 end))
+            end
+            
+            -- Добавляем новый метод для создания вложенного PopupMenu
+            function Popup:NestedPopup(cfg)
+                local NestedPopup = Library.PopupMenu(self, cfg)
+                NestedPopup.ParentPopup = self
+                table.insert(self.ChildPopups, NestedPopup)
+                return NestedPopup
             end
 
             table.insert(Library.Popups, Popup)
@@ -2428,13 +2473,34 @@ local Env = getgenv()
             Popup.BoundObjects = {
                 Objects.Icon,
                 Popup.Objects.Outline,
-                Library.ColorpickerWindow.Objects.Outline,
+                (Library.ColorpickerWindow and type(Library.ColorpickerWindow) == "table" and Library.ColorpickerWindow.Objects and Library.ColorpickerWindow.Objects.Outline) or nil,
             }
+            
+            -- Добавляем родительский объект для отслеживания связи
+            Popup.ParentElement = self
 
             function Cog.InsideBounds(input)
+                -- Проверяем основные объекты
                 for _,obj in Popup.BoundObjects do
-                    if Utility.MouseOver(obj, input) then
+                    if obj and Utility.MouseOver(obj, input) then
                         return true
+                    end
+                end
+                
+                -- Также проверяем все вложенные попапы
+                for _, childPopup in pairs(Popup.ChildPopups) do
+                    if childPopup.Objects.Outline.Visible then
+                        -- Проверяем сам popup
+                        if Utility.MouseOver(childPopup.Objects.Outline, input) then
+                            return true
+                        end
+                        
+                        -- Рекурсивно проверяем дочерние popups
+                        for _, nestedObj in pairs(childPopup.BoundObjects or {}) do
+                            if nestedObj and Utility.MouseOver(nestedObj, input) then
+                                return true
+                            end
+                        end
                     end
                 end
                 
@@ -2442,12 +2508,32 @@ local Env = getgenv()
             end
 
             Utility.Signal(UserInputService.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 and Popup.Objects.Outline.Visible and not Cog.InsideBounds(input) then
-                    Popup.Visible(false, Popup.Objects.Outline.AbsolutePosition)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 and Popup.Objects.Outline.Visible then
+                    -- Рекурсивная функция для проверки всех вложенных поп-апов
+                    local function isInsideNestedPopups(popup, input)
+                        -- Проверяем текущий popup
+                        if Utility.MouseOver(popup.Objects.Outline, input) then
+                            return true
+                        end
+                        
+                        -- Проверяем все дочерние popup'ы рекурсивно
+                        for _, childPopup in pairs(popup.ChildPopups) do
+                            if childPopup.Objects.Outline.Visible and isInsideNestedPopups(childPopup, input) then
+                                return true
+                            end
+                        end
+                        
+                        return false
+                    end
+                    
+                    -- Если курсор не внутри иконки и не внутри popup или любого вложенного popup
+                    if not Utility.MouseOver(Objects.Icon, input) and not isInsideNestedPopups(Popup, input) then
+                        Popup.Visible(false, Popup.Objects.Outline.AbsolutePosition)
 
-                    Library.ChangeObjectTheme(Objects.Icon, {
-                        ImageColor3 = "Dark Text",
-                    }, true)
+                        Library.ChangeObjectTheme(Objects.Icon, {
+                            ImageColor3 = "Dark Text",
+                        }, true)
+                    end
                 end
             end))
 
@@ -3234,6 +3320,371 @@ local Env = getgenv()
             return setmetatable(Button, Library)
         end
 
+        function Library.List(self, cfg)
+            cfg = cfg or { }; cfg = Library.Config(cfg, {
+                name = "New List",
+                description = nil,
+                value = "value1",
+                values = { "value1", "value2", "value3", "value4", "value5", "value6" },
+                multi = false,
+                size = 100,
+                callback = function() end,
+                flag = nil,
+            })
+
+            if not cfg.flag then
+                cfg.flag = cfg.name
+            end
+
+            local List = {
+                ZIndex = self.ZIndex,
+
+                Objects = { },
+
+                Popup = { },
+
+                Items = { },
+
+                Value = nil,
+            }
+
+            local ZIndex = List.ZIndex
+
+            local Objects = List.Objects; do
+                Objects.Holder = Utility.New("Frame", {
+                    Name = "Holder",
+                    Size = UDim2.new(1, 0, 0, 0),
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderSizePixel = 0,
+                    Parent = self.Holder,
+                    ZIndex = ZIndex,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Parent = Objects.Holder,
+                    Padding = UDim.new(0, 5),
+                })
+
+                ZIndex += 1
+
+                Objects.Line = Utility.New("TextButton", {
+                    Name = "Line",
+                    Size = UDim2.new(1, 0, 0, 0),
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    AutoButtonColor = false,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Style = Enum.ButtonStyle.Custom,
+                    Text = "",
+                    Parent = Objects.Holder,
+                    ZIndex = ZIndex,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Parent = Objects.Line,
+                    Padding = UDim.new(0, 2),
+                })
+
+                ZIndex += 1
+
+                Objects.Text = Utility.New("TextLabel", {
+                    Name = "Text",
+                    TextStrokeTransparency = 0.8,
+                    BackgroundTransparency = 1,
+                    TextSize = Library.FontSize,
+                    FontFace = Library.Font,
+                    Size = UDim2.new(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Text = cfg.name,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = Objects.Line,
+                    ZIndex = ZIndex,
+                }, { TextColor3 = "Dark Text" })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                    Parent = Objects.Text,
+                    Padding = UDim.new(0, 2),
+                })
+
+                ZIndex += 1
+
+                Objects.SideHolder = Utility.New("Frame", {
+                    Name = "SideHolder",
+                    Size = UDim2.new(0, 0, 1, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Parent = Objects.Text,
+                    ZIndex = ZIndex,
+                })
+
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                    Parent = Objects.SideHolder,
+                    Padding = UDim.new(0, 2),
+                }) 
+
+                List.SideHolder = Objects.SideHolder
+
+                ZIndex += 1
+
+                if cfg.description then
+                    Objects.Description = Utility.New("TextLabel", {
+                        Name = "Description",
+                        TextStrokeTransparency = 0.8,
+                        BackgroundTransparency = 1,
+                        TextSize = Library.FontSize - 2,
+                        FontFace = Library.Font,
+                        Size = UDim2.new(1, 0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        Text = cfg.description,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = Objects.Line,
+                        ZIndex = ZIndex,
+                        TextWrapped = true,
+                    }, { TextColor3 = "Light Text" })
+
+                    ZIndex += 1
+                end
+
+                Objects.Outline = Utility.New("TextButton", {
+                    Name = "Outline",
+                    Size = UDim2.new(1, 0, 0, cfg.size),
+                    Position = UDim2.fromOffset(0, 0),
+                    BorderSizePixel = 0,
+                    AutoButtonColor = false,
+                    Style = Enum.ButtonStyle.Custom,
+                    Text = "",
+                    Parent = Objects.Holder,
+                    ZIndex = ZIndex,
+                }, { BackgroundColor3 = "Inline" })
+
+                Utility.New("UICorner", {
+                    Name = "UICorner",
+                    CornerRadius = UDim.new(0, 5),
+                    Parent = Objects.Outline,
+                })
+
+                ZIndex += 1
+
+                Objects.Background = Utility.New("Frame", {
+                    Name = "Background",
+                    Size = UDim2.new(1, -2, 1, -2),
+                    Position = UDim2.fromOffset(1, 1),
+                    BorderSizePixel = 0,
+                    Parent = Objects.Outline,
+                    ZIndex = ZIndex,
+                    ClipsDescendants = true,
+                }, { BackgroundColor3 = "Background" })
+
+                Utility.New("UICorner", {
+                    Name = "UICorner",
+                    CornerRadius = UDim.new(0, 5),
+                    Parent = Objects.Background,
+                })
+
+                Utility.New("UIPadding", {
+                    Name = "UIPadding",
+                    PaddingLeft = UDim.new(0, 5),
+                    PaddingRight = UDim.new(0, 5),
+                    PaddingTop = UDim.new(0, 5),
+                    PaddingBottom = UDim.new(0, 5),
+                    Parent = Objects.Background
+                })
+
+                ZIndex += 1
+
+                Objects.Scrolling = Utility.New("ScrollingFrame", {
+                    Name = "Scrolling",
+                    Size = UDim2.new(1, 0, 1, 0),
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Parent = Objects.Background,
+                    ZIndex = ZIndex,
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    CanvasSize = UDim2.new(0, 0, 0, 0),
+                    BottomImage = Library.ScrollBar,
+                    MidImage = Library.ScrollBar,
+                    TopImage = Library.ScrollBar,
+                    ScrollBarThickness = 2,
+                }, { ScrollBarImageColor3 = "Accent" })
+
+                ZIndex += 1
+
+                Objects.Content = Utility.New("Frame", {
+                    Name = "Content",
+                    Size = UDim2.new(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Position = UDim2.fromOffset(0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Parent = Objects.Scrolling,
+                    ZIndex = ZIndex,
+                })
+                
+                Utility.New("UIListLayout", {
+                    Name = "UIListLayout",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                    Parent = Objects.Content,
+                    Padding = UDim.new(0, 5),
+                })
+
+                ZIndex += 1
+
+            end; List.ZIndex = ZIndex
+
+            function List.Set(value)
+                if cfg.multi then
+                    if type(value) == "table" then -- probably means config/values is loading...
+                        for _,item in List.Items do
+                            item.Select(false)
+                        end
+
+                        for _,item in value do
+                            for _,item2 in List.Items do
+                                if item2.Name == item then
+                                    item2.Select(true)
+                                end
+                            end
+                        end
+
+                        List.Value = value
+
+                        cfg.callback(List.Value)
+
+                        Library.Flags[cfg.flag] = List.Value
+                    else
+                        local Index = table.find(List.Value, value)
+
+                        if Index then
+                            table.remove(List.Value, Index)
+
+                            for _,item in List.Items do
+                                if item.Name == value then
+                                    item.Select(false)
+                                end
+                            end
+
+                            cfg.callback(List.Value)
+
+                            Library.Flags[cfg.flag] = List.Value
+                        else
+                            table.insert(List.Value, value)
+
+                            for _,item in List.Items do
+                                if item.Name == value then
+                                    item.Select(true)
+                                end
+                            end
+
+                            cfg.callback(List.Value)
+
+                            Library.Flags[cfg.flag] = List.Value
+                        end
+                    end
+                else
+                    for _,item in List.Items do
+                        item.Select(item.Name == value)
+                    end
+
+                    List.Value = value
+
+                    cfg.callback(List.Value)
+
+                    Library.Flags[cfg.flag] = List.Value
+                end
+            end
+
+            function List.Add(name)
+                local Item = {
+                    Objects = {},
+
+                    Name = name,
+
+                    Selected = false,
+                }
+
+                local Objs = Item.Objects; do
+                    Objs.Text = Utility.New("TextButton", {
+                        Name = "Text",
+                        TextStrokeTransparency = 0.8,
+                        BackgroundTransparency = 1,
+                        TextSize = Library.FontSize,
+                        FontFace = Library.Font,
+                        Size = UDim2.new(1, 0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        Text = name,
+                        AutoButtonColor = false,
+                        Style = Enum.ButtonStyle.Custom,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = Objects.Content,
+                        ZIndex = ZIndex,
+                    }, { TextColor3 = "Dark Text" })
+                end
+
+                function Item.Select(value)
+                    Library.ChangeObjectTheme(Objs.Text, {
+                        TextColor3 = value and "Text" or "Dark Text",
+                    }, true)
+
+                    Item.Selected = value
+                end
+
+                Utility.Signal(Objs.Text.MouseButton1Click:Connect(function()
+                    List.Set(name)
+                end))
+
+                table.insert(List.Items, Item)
+
+                return Item
+            end
+
+            function List.Refresh(tbl)
+                for _,item in List.Items do
+                    item.Objects.Text:Destroy()
+                end
+
+                List.Items = { }
+
+                List.Value = cfg.multi and { } or nil
+
+                for _,item in tbl do
+                    if type(item) == "string" then
+                        List.Add(item)
+                    end
+                end
+            end
+
+            for _,item in cfg.values do
+                List.Add(item)
+            end
+
+            List.Set(cfg.value)
+
+            Library.ConfigFlags[cfg.flag] = List.Set
+
+            return setmetatable(List, Library)
+        end
+        
         function Library.Dropdown(self, cfg)
             cfg = cfg or {}; cfg = Library.Config(cfg, {
                 name = "New Dropdown",
@@ -3543,8 +3994,15 @@ local Env = getgenv()
                 end))
 
                 Utility.Signal(UserInputService.InputBegan:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 and Dropdown.Visible and not Utility.MouseOver(Popup.Outline, input) then
-                        Dropdown.Open()
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 and Dropdown.Visible then
+                        if not Utility.MouseOver(Popup.Outline, input) then
+                            -- Close dropdown safely
+                            if Dropdown and type(Dropdown) == "table" then
+                                if Dropdown.Display and type(Dropdown.Display) == "function" then
+                                    Dropdown.Display()
+                                end
+                            end
+                        end
                     end
                 end))
             --
@@ -3555,17 +4013,27 @@ local Env = getgenv()
                 if cfg.multi then
                     local CurrentText = {}
 
-                    if #Value > 0 then
+                    if Value and #Value > 0 then
                         for _,item in Value do
-                            table.insert(CurrentText, item)
-        
+                            if type(item) == "string" then
+                                table.insert(CurrentText, item)
+                            end
+                        end
+                        
+                        if #CurrentText > 0 then
                             Objects.Value.Text = table.concat(CurrentText, ", ")
+                        else
+                            Objects.Value.Text = "-"
                         end
                     else
                         Objects.Value.Text = "-"
                     end
                 else
-                    Objects.Value.Text = Value == "" or Value == nil and "-" or Value
+                    if type(Value) == "string" then
+                        Objects.Value.Text = Value ~= "" and Value or "-" 
+                    else
+                        Objects.Value.Text = "-"
+                    end
                 end
             end
 
@@ -3702,23 +4170,27 @@ local Env = getgenv()
                         end
                     end
                 else
-                    for _,item in Dropdown.Items do
-                        item.Select(item.Name == value)
-                    end
+                                    for _,item in Dropdown.Items do
+                    item.Select(item.Name == value)
+                end
 
-                    Dropdown.Value = value
+                Dropdown.Value = type(value) == "string" and value or nil
 
-                    Dropdown.Display()
+                Dropdown.Display()
 
-                    if not ignore then
-                        cfg.callback(Dropdown.Value)
-                    end
+                if not ignore then
+                    cfg.callback(Dropdown.Value)
+                end
 
-                    Library.Flags[cfg.flag] = Dropdown.Value
+                Library.Flags[cfg.flag] = Dropdown.Value
                 end
             end
 
             function Dropdown.Add(name)
+                if type(name) ~= "string" then
+                    return
+                end
+                
                 local Item = {
                     Objects = {},
 
@@ -3770,9 +4242,11 @@ local Env = getgenv()
                 Dropdown.Items = { }
 
                 Dropdown.Value = cfg.multi and { } or nil
-
+                
                 for _,item in tbl do
-                    Dropdown.Add(item)
+                    if type(item) == "string" then
+                        Dropdown.Add(item)
+                    end
                 end
 
                 Dropdown.Display()
@@ -4135,7 +4609,7 @@ local Env = getgenv()
             cfg = cfg or { }; cfg = Library.Config(cfg, {
                 name = "New Keybind",
                 value = false,
-                key = Enum.KeyCode.E,
+                key = Enum.KeyCode.Unknown,
                 mode = "Toggle",
                 callback = function() end,
                 flag = nil,
@@ -4462,7 +4936,7 @@ local Env = getgenv()
                 if Type == "EnumItem" then
                     Keybind.Key = value 
 
-                    value = ( value == Enum.KeyCode.Unknown and "..." or value.Name )
+                    value = ( value == Enum.KeyCode.Unknown and "None" or value.Name )
 
                     Popup.Key.Text = Library.KeyConverters[ value:lower() ] or value
                     
@@ -4614,7 +5088,8 @@ local Env = getgenv()
             end))
 
             Utility.Signal(UserInputService.InputBegan:Connect(function(input) 
-                if input.KeyCode == Keybind.Key or input.UserInputType == Keybind.Key then 
+                -- Не обрабатываем нажатия, если кейбинд установлен на Unknown
+                if Keybind.Key ~= Enum.KeyCode.Unknown and (input.KeyCode == Keybind.Key or input.UserInputType == Keybind.Key) then 
                     local Value = Keybind.Mode ~= "Toggle" or not Keybind.Value
                     Keybind.Set( Value )
 
@@ -4624,7 +5099,8 @@ local Env = getgenv()
                         end
 
                         Keybind.OnHold = Utility.Signal(UserInputService.InputEnded:Connect(function(input) 
-                            if input.KeyCode == Keybind.Key or input.UserInputType == Keybind.Key then 
+                            -- Проверяем, что кейбинд не Unknown и что это правильная клавиша
+                            if Keybind.Key ~= Enum.KeyCode.Unknown and (input.KeyCode == Keybind.Key or input.UserInputType == Keybind.Key) then 
                                 Keybind.Set( false )
 
                                 if Keybind.OnHold then 
@@ -5580,6 +6056,173 @@ local Env = getgenv()
             end
         end
 
+        -- Config Manager System
+        function Library.CreateConfigManager(tab, options)
+            if not tab or type(tab) ~= "table" then
+                return nil
+            end
+            
+            options = options or {}
+            local side = options.side or "left"
+            local sectionName = options.name or "Config Manager"
+            local sectionDesc = options.description or "Save and load your configurations"
+            local folderPath = options.folderPath or (Folder.."/Games/"..(Game and Game.Name or "Universal").."/Configs")
+            
+            -- Use tab's ZIndex if available
+            local ZIndex = (tab.ZIndex or 0) + 1
+            
+            if not isfolder(folderPath) then
+                makefolder(folderPath)
+            end
+            
+            -- Create section for config manager
+            local ConfigSection = tab:Section({
+                name = sectionName,
+                description = sectionDesc,
+                side = side
+            })
+            
+            -- Config name textbox
+            local configNameTextbox = ConfigSection:Textbox({
+                name = "Config Name",
+                placeholder = "Enter config name...",
+                flag = "ui_config_name"
+            })
+            
+            -- Get list of configs
+            local function GetConfigList()
+                local configs = {}
+                if isfolder(folderPath) then
+                    for _, file in ipairs(listfiles(folderPath)) do
+                        if file:sub(-5) == ".json" then
+                            local configName = file:match("([^/\\]+)%.json$")
+                            table.insert(configs, configName)
+                        end
+                    end
+                end
+                if #configs == 0 then
+                    return {"No configs found"}
+                end
+                return configs
+            end
+            
+            -- Config list dropdown
+            local configListDropdown = ConfigSection:Dropdown({
+                name = "Saved Configs",
+                description = "Select a saved configuration",
+                values = GetConfigList(),
+                callback = function(value)
+                    if value ~= "No configs found" then
+                        Library.Flags["ui_config_name"] = value
+                    end
+                end,
+                flag = "ui_selected_config"
+            })
+            
+            -- Function to refresh the dropdown
+            local function RefreshConfigList()
+                if configListDropdown and type(configListDropdown) == "table" then
+                    local configs = GetConfigList()
+                    if configListDropdown.Refresh and type(configListDropdown.Refresh) == "function" then
+                        configListDropdown:Refresh(configs)
+                    end
+                    
+                    -- Update the flag
+                    if #configs > 0 and configs[1] ~= "No configs found" then
+                        Library.Flags["ui_selected_config"] = configs[1]
+                    else
+                        Library.Flags["ui_selected_config"] = "No configs found"
+                    end
+                    
+                    -- Try to update display if available
+                    pcall(function()
+                        if Library.Flags["ui_selected_config"] and configListDropdown.Update then
+                            configListDropdown:Update(Library.Flags["ui_selected_config"])
+                        end
+                    end)
+                end
+            end
+            
+            -- Save config button
+            ConfigSection:Button({
+                name = "Save Config",
+                description = "Save current settings to a config file",
+                callback = function()
+                    local configName = Library.Flags["ui_config_name"]
+                    if not configName or configName == "" or configName == "No configs found" then
+                        configName = "default"
+                    end
+                    
+                    local configPath = folderPath.."/"..configName..".json"
+                    local configData = Library.GetConfig()
+                    
+                    writefile(configPath, configData)
+                    Library.Notification({ name = "Config Saved", description = "Configuration '"..configName.."' has been saved." })
+                    
+                    RefreshConfigList()
+                end
+            })
+            
+            -- Load config button
+            ConfigSection:Button({
+                name = "Load Config",
+                description = "Load selected configuration",
+                callback = function()
+                    local configName = Library.Flags["ui_selected_config"]
+                    if not configName or configName == "No configs found" then
+                        Library.Notification({ name = "Error", description = "No config selected" })
+                        return
+                    end
+                    
+                    local configPath = folderPath.."/"..configName..".json"
+                    if isfile(configPath) then
+                        local data = readfile(configPath)
+                        Library.LoadConfig(data)
+                        Library.Notification({ name = "Config Loaded", description = "Configuration '"..configName.."' has been loaded." })
+                    else
+                        Library.Notification({ name = "Error", description = "Config file not found" })
+                    end
+                end
+            })
+            
+            -- Delete config button
+            ConfigSection:Button({
+                name = "Delete Config",
+                description = "Delete selected configuration",
+                callback = function()
+                    local configName = Library.Flags["ui_selected_config"]
+                    if not configName or configName == "No configs found" then
+                        Library.Notification({ name = "Error", description = "No config selected" })
+                        return
+                    end
+                    
+                    local configPath = folderPath.."/"..configName..".json"
+                    if isfile(configPath) then
+                        delfile(configPath)
+                        Library.Notification({ name = "Config Deleted", description = "Configuration '"..configName.."' has been deleted." })
+                        RefreshConfigList()
+                    else
+                        Library.Notification({ name = "Error", description = "Config file not found" })
+                    end
+                end
+            })
+            
+            -- Refresh list button
+            ConfigSection:Button({
+                name = "Refresh List",
+                description = "Refresh the config list",
+                callback = function()
+                    RefreshConfigList()
+                    Library.Notification({ name = "List Refreshed", description = "Config list has been updated." })
+                end
+            })
+            
+            return {
+                Section = ConfigSection,
+                RefreshList = RefreshConfigList
+            }
+        end
+
         function Library.Unload()
             for _,obj in Utility.Connections do
                 obj:Disconnect()
@@ -5823,1854 +6466,5 @@ local Env = getgenv()
     end)))
 --
 
--- legitbot
-    local Legitbot = {
-        Groups = {
-           "Head",
-           "Torso",
-           "Arms",
-           "Legs" 
-        },
-
-        Hitboxes = {
-            ["LeftHand"] = "Arms",
-            ["LeftLowerArm"] = "Arms",
-            ["LeftUpperArm"] = "Arms",
-
-            ["RightHand"] = "Arms",
-            ["RightLowerArm"] = "Arms",
-            ["RightUpperArm"] = "Arms",
-
-            ["LeftFoot"] = "Legs",
-            ["LeftLowerLeg"] = "Legs",
-            ["LeftUpperLeg"] = "Legs",
-            
-            ["RightFoot"] = "Legs",
-            ["RightLowerLeg"] = "Legs",
-            ["RightUpperLeg"] = "Legs",
-
-            ["Head"] = "Head",
-
-            ["Torso"] = "Torso",
-            ["LowerTorso"] = "Torso",
-            ["UpperTorso"] = "Torso",
-            ["HumanoidRootPart"] = "Torso",
-        },
-
-        RaycastParams = RaycastParams.new(),
-
-        Holder = Utility.New("ScreenGui", {
-            Name = "\0",
-            Parent = HiddenUI,
-            IgnoreGuiInset = true,
-        })
-    }; do
-        Legitbot.RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
-        Legitbot.RaycastParams.FilterDescendantsInstances = { Camera, Workspace.Terrain, Workspace:FindFirstAncestor("Ignore"), Workspace:FindFirstAncestor("Ignored"), Workspace:FindFirstAncestor("ignore"), Workspace:FindFirstAncestor("ignored") }
-        
-        function Legitbot.GetTarget(cfg, origin, rootpos)
-            cfg = cfg or {}; Library.Config(cfg, {
-                usefov = false,
-                fov = 90,
-                usedeadzone = false,
-                deadzone = 90,
-                hitboxes = { "Head" },
-                limitdistance = false,
-                limitdistanceamount = 100,
-                healthcheck = false,
-                healthcheckamount = 100,
-                teamcheck = false,
-                ignoregod = false,
-            })
-
-            local BestTarget, BestHitbox, BestPosition, LastDistance = nil, nil, nil, math.huge
-
-            for _,plr in PlayerInfo.GetPlayers() do
-                if plr == LocalPlayer then
-                    continue
-                end
-                
-                local Info = PlayerInfo.GetInfo(plr)
-
-                local Data = Info and Info.Data
-
-                if not (Data and Data.Alive) then
-                    continue
-                end
-
-                if cfg.ignoregod and Data.Character:FindFirstChildWhichIsA("ForceField") then
-                    continue
-                end
-                
-                for _,part in Data.Character:GetChildren() do
-                    local Group = Legitbot.Hitboxes[part.Name]
-
-                    if not (Group and table.find(cfg.hitboxes, Group)) then
-                        continue
-                    end
-
-                    if cfg.teamcheck and Data.IsTeammate then
-                        continue
-                    end
-
-                    local Position, OnScreen = Camera:WorldToViewportPoint(part.Position)
-
-                    if not (OnScreen and Position) then
-                        continue
-                    end
-
-                    local Position2d = Vector2.new(Position.X, Position.Y)
-
-                    local Magnitude = (Position2d - origin).Magnitude
-                    if cfg.usefov and Magnitude > cfg.fov then
-                        continue
-                    end
-
-                    if cfg.usedeadzone and (Position2d - origin).Magnitude < cfg.deadzone then
-                        continue
-                    end
-
-                    if cfg.limitdistance and (Position - rootpos).Magnitude > cfg.limitdistanceamount then
-                        continue
-                    end
-
-                    if cfg.healthcheck and Data.Health < cfg.healthcheckamount then
-                        continue
-                    end
-
-                    if Magnitude < LastDistance then
-                        LastDistance = Magnitude
-
-                        BestTarget = plr
-
-                        BestHitbox = part
-
-                        BestPosition = Position
-                    end
-                end
-            end
-
-            return BestTarget, BestHitbox, BestPosition
-        end
-
-        function Legitbot.Origin(origin)
-            origin = origin:lower()
-
-            if origin == "screen" then
-                return Camera.ViewportSize / 2
-            else
-                return UserInputService:GetMouseLocation()
-            end
-        end
-
-        function Legitbot.Circle()
-            local Circle = Utility.New("Frame", {
-                Parent = Legitbot.Holder,
-                BorderSizePixel = 0,
-                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                Size = UDim2.new(0, 200, 0, 200),
-                Position = UDim2.new(0.5, 0, 0.5, 0),
-                BorderColor3 = Color3.fromRGB(0, 0, 0),
-                Visible = false        
-            })
-            
-            Utility.New("UICorner", {
-                Parent = Circle,
-                CornerRadius = UDim.new(1, 0)
-            })
-            
-            local CircleStroke = Utility.New("UIStroke", {
-                Parent = Circle,
-                Color = Color3.fromRGB(255, 255, 255)
-            })
-    
-            local StrokeGradient = Utility.New("UIGradient", {
-                Parent = CircleStroke,
-                Rotation = 90,
-                Color = ColorSequence.new{ColorSequenceKeypoint.new(0.000, Color3.fromRGB(255, 255, 255)),ColorSequenceKeypoint.new(1.000, Color3.fromRGB(255, 255, 255))}
-            })
-    
-            local Gradient = Utility.New("UIGradient", {
-                Parent = Circle,
-                Color = ColorSequence.new{ColorSequenceKeypoint.new(0.000, Color3.fromRGB(255, 255, 255)),ColorSequenceKeypoint.new(1.000, Color3.fromRGB(255, 255, 255))}
-            })
-    
-            return {
-                ["Circle"] = Circle, 
-                ["Gradient"] = Gradient, 
-                ["StrokeGradient"] = StrokeGradient
-            }
-        end
-
-        function Legitbot.CircleColor(circle, from, to, outlinefrom, outlineto)
-            if not Loaded then
-                return 
-            end
-
-            circle.Gradient.Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, from.c),
-                ColorSequenceKeypoint.new(1, to.c)
-            }
-            circle.Gradient.Transparency = NumberSequence.new{
-                NumberSequenceKeypoint.new(0, from.a),
-                NumberSequenceKeypoint.new(1, to.a)
-            }   
-            circle.StrokeGradient.Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, outlinefrom.c),
-                ColorSequenceKeypoint.new(1, outlineto.c)
-            }
-            circle.StrokeGradient.Transparency = NumberSequence.new{
-                NumberSequenceKeypoint.new(0, outlinefrom.a),
-                NumberSequenceKeypoint.new(1, outlineto.a)
-            }    
-        end
-
-        function Legitbot.HandleCircle(circle, origin, fov, visible, spin, spinspeed)
-            circle.Circle.Visible = visible
-        
-            if not circle.Circle.Visible then
-                return
-            end
-    
-            local FovSize = fov * 1.6
-            circle.Circle.Size = UDim2.new(0, FovSize, 0, FovSize)
-            circle.Circle.Position = UDim2.new(0, origin.x, 0, origin.y)
-            
-            circle.Gradient.Rotation = spin and math.sin(os.clock() * (spinspeed / 200)) * 360 or 90
-        
-            circle.StrokeGradient.Rotation = spin and math.sin(os.clock() * (spinspeed / 190)) * 360 or 90
-        end
-
-        function Legitbot.Lock(position, mouse, smoothing, type)
-            if type == "Mouse" then
-                mousemoverel(
-                    (position.x - mouse.x) / smoothing,
-                    (position.y - mouse.y) / smoothing
-                )
-            else
-                Camera.CFrame = Camera.CFrame:Lerp(
-                    CFrame.new(Camera.CFrame.Position, position), 
-                    (100 - smoothing) / 100
-                )
-            end
-        end
-        
-        function Legitbot.Velocity(part)
-            local Position = part.Position
-
-            local Tick = RunService.Heartbeat:Wait()
-            
-            return (part.Position - Position) / Tick, Tick
-        end
-
-        function Legitbot.Trajectory(velocity, delta)
-            local GravityVelocity = velocity + Acceleration * delta
-            local EndPosition = GravityVelocity * delta
-
-            if EndPosition ~= EndPosition then 
-                return Vector3.zero
-            end 
-        
-            return EndPosition
-        end
-
-        function Legitbot.Prediction(torso, part)
-            local Velocity = Legitbot.Velocity(torso)
-
-            local Ping = (Stats.PerformanceStats.Ping:GetValue() / 1000) * Library.Flags["aimbot_prediction_amount"]
-
-            --local Raycast = Workspace:Raycast(part.Position, -(Vector3.yAxis * 2), Legitbot.RaycastParams)
-
-            local Prediction = Vector3.zero
-            if Library.Flags["aimbot_prediction"] == "Velocity" then
-                Prediction = ( Velocity * Ping )
-            elseif Velocity.Magnitude > 0 then
-                --if not Raycast then
-                --print("hi guys")
-                Prediction = Legitbot.Trajectory(Velocity, Ping)
-            end
-
-            local Raycast = Workspace:Raycast(part.Position, Prediction, Legitbot.RaycastParams)
-
-            local Position = CFrame.new()
-            if Raycast then
-                Position = CFrame.new(Raycast.Position) * CFrame.Angles(part.CFrame:ToOrientation())
-            else
-                Position = part.CFrame + Prediction
-            end
-
-            return Position
-        end
-        
-        Legitbot.Aimbot = {
-            Target = nil,
-        }; do
-            Legitbot.Aimbot.Circle = Legitbot.Circle()
-
-            function Legitbot.Aimbot.Think()
-                local Origin = Legitbot.Origin(Library.Flags["aimbot_origin"])
-
-                if not Origin then
-                    Legitbot.Aimbot.Target = nil
-
-                    return
-                end
-
-                Legitbot.HandleCircle(Legitbot.Aimbot.Circle, Origin, Library.Flags["aimbot_fov"], Library.Flags["aimbot_use_fov"] and Library.Flags["aimbot_show_fov"], Library.Flags["aimbot_show_fov_spin"], Library.Flags["aimbot_show_fov_spin_speed"])
-
-                if Library.Flags["aimbot_use_fov"] and Library.Flags["aimbot_show_fov"] then
-                    Legitbot.CircleColor(Legitbot.Aimbot.Circle, Library.Flags["aimbot_show_fov_from"], Library.Flags["aimbot_show_fov_to"], Library.Flags["aimbot_show_fov_outline_from"], Library.Flags["aimbot_show_fov_outline_to"])
-                end
-
-                if not (Library.Flags["aimbot"] and Library.Flags["aimbot_key"]) then
-                    Legitbot.Aimbot.Target = nil
-
-                    return
-                end
-
-                if not (LocalPlayerData and LocalPlayerData.Data and LocalPlayerData.Data.Alive) then
-                    Legitbot.Aimbot.Target = nil
-                    
-                    return
-                end
-
-                local Torso = LocalPlayerData.Data.Torso
-
-                if not Torso then
-                    Legitbot.Aimbot.Target = nil
-
-                    return
-                end
-
-                local Target, Hitbox = Legitbot.GetTarget({
-                    usefov = Library.Flags["aimbot_use_fov"],
-                    fov = Library.Flags["aimbot_fov"],
-                    usedeadzone = Library.Flags["aimbot_use_deadzone"],
-                    deadzone = Library.Flags["aimbot_deadzone"],
-                    hitboxes = Library.Flags["aimbot_hitboxes"],
-                    limitdistance = Library.Flags["aimbot_limit_distance"],
-                    limitdistanceamount = Library.Flags["aimbot_limit_distance_amount"],
-                    healthcheck = Library.Flags["aimbot_health_check"],
-                    healthcheckamount = Library.Flags["aimbot_health_check_amount"],
-                    teamcheck = Library.Flags["aimbot_team_check"],
-                    ignoregod = Library.Flags["aimbot_ignore_god"],
-                }, Origin, Torso.Position)
-
-                if not (Target and Hitbox) then
-                    Legitbot.Aimbot.Target = nil
-
-                    return
-                end
-                
-                Legitbot.Aimbot.Target = {
-                    Player = Target,
-                    Hitbox = Hitbox,
-                }
-
-                local Info = PlayerInfo.GetInfo(Target)
-
-                if not Info then
-                    Legitbot.Aimbot.Target = nil
-
-                    return
-                end
-
-                local Data = Info.Data
-                
-                if not Data then
-                    Legitbot.Aimbot.Target = nil
-
-                    return
-                end
-
-                local Position = Hitbox.Position
-
-                if Library.Flags["aimbot_prediction"] ~= "Off" then
-                    Position = Legitbot.Prediction(Data.Torso, Hitbox).Position
-                end
-
-                local Position2d, _ = Camera:WorldToViewportPoint(Position)
-
-                Legitbot.Lock(Library.Flags["aimbot_type"] == "Mouse" and Position2d or Position, UserInputService:GetMouseLocation(), Library.Flags["aimbot_smoothing"], Library.Flags["aimbot_type"])
-            end
-
-            RunService:BindToRenderStep("legitbot.aimbot.think", Enum.RenderPriority.Camera.Value, function()
-                if Library.Flags["aimbot_bind"] then
-                    Legitbot.Aimbot.Think()
-                end
-            end)
-
-            Utility.Signal(RunService.Heartbeat:Connect(function()
-                if not Library.Flags["aimbot_bind"] then
-                    Legitbot.Aimbot.Think()
-                end
-            end))
-
-            Bin:add(function()
-                RunService:UnbindFromRenderStep("legitbot.aimbot.think")
-            end)
-        end
-
-        function Legitbot.IsTarget(player)
-            return Legitbot.Aimbot.Target and Legitbot.Aimbot.Target.Player == player
-        end
-    end
---
-
--- visuals
-    local Visuals = {}; do
-        Visuals.World = {
-            Addons = {
-                CameraColor = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Utility.New("ColorCorrectionEffect", {Parent = Lighting}),
-                Bloom = Lighting:FindFirstChildOfClass("BloomEffect") or Utility.New("BloomEffect", {Parent = Lighting}),
-                Atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or Utility.New("Atmosphere", {Parent = workspace}),
-                SunRay = Lighting:FindFirstChildOfClass("SunRaysEffect") or Utility.New("SunRaysEffect", {Parent = Lighting}),
-                Sky = Lighting:FindFirstChildOfClass("Sky") or Utility.New("Sky", {Parent = Lighting}),
-            },
-
-            Skyboxes = loadstring(game:HttpGet("https://raw.githubusercontent.com/luminbot/FontStorage/main/skybox.lua"))(),
-        }; do
-            local Addons = Visuals.World.Addons
-
-            function Visuals.World.Think(prop)
-                if not Loaded then
-                    return
-                end
-
-                prop = prop or "All"
-
-                if prop == "Lighting" then
-                    Lighting.Brightness = Library.Flags["world_brightness"]
-                    Lighting.GlobalShadows = not Library.Flags["world_brightness"] == 1
-                    if Library.Flags["world_ambience"] then
-                        Lighting.Ambient = Library.Flags["world_ambience_inside"].c
-                        Lighting.OutdoorAmbient = Library.Flags["world_ambience_outside"].c
-                    -- else 
-                    --     Lighting.Ambient = Visuals.stored["Lighting"]["Ambient"] or Lighting.Ambient
-                    --     Lighting.OutdoorAmbient = Visuals.stored["Lighting"]["OutdoorAmbient"] or Lighting.OutdoorAmbient
-                    end
-                elseif prop == "ColorCorrection" then
-                    local CameraColor = Addons.CameraColor or Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Utility.New("ColorCorrectionEffect", {Parent = Lighting})
-                    
-                    Addons.CameraColor = CameraColor
-        
-                    CameraColor.Enabled = Library.Flags["world_color_correction"]
-                    if CameraColor.Enabled then
-                        CameraColor.TintColor = Library.Flags["world_color_correction_color"].c
-                        CameraColor.Saturation = Library.Flags["world_color_correction_saturation"]
-                        CameraColor.Contrast = Library.Flags["world_color_correction_contrast"]
-                    end
-                elseif prop == "Bloom" then
-                    local Bloom = Addons.Bloom or Lighting:FindFirstChildOfClass("BloomEffect") or Utility.New("BloomEffect", {Parent = Lighting})
-
-                    Addons.Bloom = Bloom
-
-                    Bloom.Enabled = Library.Flags["world_bloom"]
-                    if Bloom.Enabled then
-                        Bloom.Size = Library.Flags["world_bloom_size"]
-                        Bloom.Intensity = Library.Flags["world_bloom_intensity"]
-                        Bloom.Threshold = 1 - Library.Flags["world_bloom_threshold"]
-                    end
-                elseif prop == "Atmosphere" then
-                    local Atmosphere = Addons.Atmosphere and Addons.Atmosphere.Parent and Addons.Atmosphere or Lighting:FindFirstChildOfClass("Atmosphere") or Utility.New("Atmosphere", {Parent = workspace})
-                    Addons.Atmosphere = Atmosphere
-
-                    Atmosphere.Parent = Library.Flags["world_atmosphere"] and Lighting or Workspace
-
-                    if not Atmosphere.Parent then 
-                        return 
-                    end
-        
-                    if Library.Flags["world_atmosphere"] then
-                        Atmosphere.Density = Library.Flags["world_atmosphere_density"]
-                        Atmosphere.Offset = Library.Flags["world_atmosphere_offset"]
-                        Atmosphere.Haze = Library.Flags["world_atmosphere_haze"]
-                        Atmosphere.Glare = Library.Flags["world_atmosphere_glare"]
-                        Atmosphere.Color = Library.Flags["world_atmosphere_color"].c
-                        Atmosphere.Decay = Library.Flags["world_atmosphere_dark_color"].c
-                    end
-                elseif prop == "Sky" then
-                    if Library.Flags["world_skybox"] and Library.Flags["world_skybox"] ~= "None" then
-                        local Sky = Addons.Sky or Lighting:FindFirstChildOfClass("Sky") or Utility.New("Sky", {Parent = Lighting})
-                        Addons.Sky = Sky
-                        Sky.StarCount = Library.Flags["world_skybox_star_count"]
-        
-                        for i, v in Visuals.World.Skyboxes[Library.Flags["world_skybox"]] do
-                            Sky[i] = v
-                        end
-                    end
-                elseif prop == "TimeOfDay" then 
-                    if Library.Flags["world_time_changer"] then 
-                        Lighting.ClockTime = Library.Flags["world_time_changer_hour"]
-                    end
-                elseif prop == "SunRay" then 
-                    local SunRay = Addons.SunRay or Lighting:FindFirstChildOfClass("SunRaysEffect") or Utility.New("SunRaysEffect", {Parent = Lighting})
-
-                    Addons.SunRay = SunRay
-
-                    SunRay.Enabled = Library.Flags["world_sunray"]
-                    if SunRay.Enabled then
-                        SunRay.Spread = Library.Flags["world_sunray_spread"]
-                        SunRay.Intensity = Library.Flags["world_sunray_intensity"]
-                    end
-                elseif prop == "All" then
-                    for _,v in {"Sky", "Bloom", "Atmosphere", "Lighting", "SunRay", "TimeOfDay", "ColorCorrection"} do
-                        Visuals.World.Think(v)
-                    end
-                end
-            end
-
-            Utility.Signal(Lighting.Changed:Connect(LPH_JIT_MAX(function()
-                if value == "TimeOfDay" then 
-                    Visuals.World.Think("TimeOfDay")
-                    return
-                elseif value == "ClockTime" then 
-                    return
-                end
-                
-                Visuals.World.Think("All")   
-            end)))
-        end
-
-        Visuals.Camera = {
-            ThirdPersonLerp = 0,
-        }; do
-            function Visuals.Camera.Think(dt)
-                if not (Library and Library.Flags) then
-                    return
-                end
-
-                if Library.Flags["camera_fov"] then
-                    Camera.FieldOfView = Library.Flags["camera_fov_amount"]
-                end
-
-                if Library.Flags["camera_aspect_ratio"] then
-                    local X, Y, Z, R00, R01, R02, R10, R11, R12, R20, R21, R22 = Camera.CFrame:GetComponents()
-                    Camera.CFrame = CFrame.new(X, Y, Z, R00 * Library.Flags["camera_aspect_ratio_horizontal"] / 100, R01 * Library.Flags["camera_aspect_ratio_vertical"] / 100, R02, R10, R11 * Library.Flags["camera_aspect_ratio_vertical"] / 100, R12, R20 * Library.Flags["camera_aspect_ratio_horizontal"] / 100, R21 * Library.Flags["camera_aspect_ratio_vertical"] / 100, R22)
-                end
-
-                Visuals.Camera.ThirdPersonLerp = Utility.Lerp(Visuals.Camera.ThirdPersonLerp, Library.Flags["camera_third_person"] and Library.Flags["camera_third_person_key"] and 1 or 0, dt * 8)
-
-                Camera.CFrame *= CFrame.new(Vector3.new(Library.Flags["camera_third_person_x"] * Visuals.Camera.ThirdPersonLerp, Library.Flags["camera_third_person_y"] * Visuals.Camera.ThirdPersonLerp, Library.Flags["camera_third_person_z"] * Visuals.Camera.ThirdPersonLerp))
-            end
-
-            RunService:BindToRenderStep("visuals.camera.think", Enum.RenderPriority.Camera.Value, Visuals.Camera.Think)
-
-            Bin:add(function()
-                RunService:UnbindFromRenderStep("visuals.camera.think")
-            end)
-        end
-    end
---
-
--- esp
-    local Esp = { Players = {}, Sides = {} }; do
-        Esp.Holder = Utility.New("ScreenGui", {
-            IgnoreGuiInset = true,
-            DisplayOrder = -1,
-            Parent = HiddenUI,
-            Name = "\0"
-        })
-        
-        function Esp.Objects()
-            local Objects = {}
-
-            Objects.Holder = Utility.New("Frame", {
-                BackgroundTransparency = 1,
-                Visible = false,
-                Parent = Esp.Holder,
-                Position = UDim2.new(0, 0, 0, 0),
-                Size = UDim2.new(1, 0, 1, 0),
-            })
-
-            Objects.BoxHolder = Utility.New("Frame", {
-                BackgroundTransparency = 1,
-                Parent = Objects.Holder,
-            })
-
-            Objects.BottomHolder = Utility.New("Frame", {
-                BackgroundTransparency = 1,
-                Parent = Objects.BoxHolder,
-                Size = UDim2.new(1, 0, 0, 0),
-                Position = UDim2.new(0, 0, 1, 1),
-            })
-
-            Utility.New("UIListLayout", {
-                Name = "UIListLayout",
-                FillDirection = Enum.FillDirection.Vertical,
-                SortOrder = Enum.SortOrder.LayoutOrder,
-                Parent = Objects.BottomHolder,
-                Padding = UDim.new(0, 2),
-            })
-
-            Objects.RightHolder = Utility.New("Frame", {
-                BackgroundTransparency = 1,
-                Parent = Objects.BoxHolder,
-                Size = UDim2.new(0, 0, 1, 0),
-                Position = UDim2.new(1, 1, 0, -2),
-            })
-
-            Utility.New("UIListLayout", {
-                Name = "UIListLayout",
-                FillDirection = Enum.FillDirection.Vertical,
-                SortOrder = Enum.SortOrder.LayoutOrder,
-                Parent = Objects.RightHolder,
-                Padding = UDim.new(0, 2),
-            })
-
-            Objects.Box = Utility.New("Frame", {
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 3, 0, 3),
-                Size = UDim2.new(1, -6, 1, -6),
-                Visible = true,
-                Parent = Objects.BoxHolder
-            })
-            Objects.BoxFill = Utility.New("Frame", {
-                Parent = Objects.Box,
-                Visible = true,
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, -1, 0, -1),
-                Size = UDim2.new(1, 2, 1, 2),
-                BorderSizePixel = 0,
-            })
-            Objects.BoxOutline = Utility.New("UIStroke", {
-                Parent = Objects.Box,
-                ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-                LineJoinMode = Enum.LineJoinMode.Miter,
-                Thickness = 3,
-                Color = Color3.fromRGB(0, 0, 0)
-            })
-            Objects.BoxInline = Utility.New("UIStroke", {
-                Parent = Objects.BoxFill,
-                ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-                LineJoinMode = Enum.LineJoinMode.Miter,
-                Thickness = 1,
-                Color = Color3.fromRGB(255, 255, 255)
-            })
-
-            Objects.Name = Utility.New("TextLabel", {
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 0, 0, 0),
-                Size = UDim2.new(1, 0, 0, 0),
-                FontFace = Fonts.Get("TahomaXP"), 
-                AutomaticSize = Enum.AutomaticSize.Y,
-                Parent = Objects.BoxHolder,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Center,
-                TextStrokeTransparency = 0,
-                TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
-                TextColor3 = Color3.fromRGB(255, 255, 255),
-            })
-
-            Objects.Name.Position = UDim2.new(0, 0, 0, -(Objects.Name.AbsoluteSize.Y + 3))
-
-            Utility.Signal(Objects.Name:GetPropertyChangedSignal("Text"):Connect(function()
-                Objects.Name.Position = UDim2.new(0, 0, 0, -(Objects.Name.AbsoluteSize.Y + 3))
-            end))
-
-            Utility.Signal(Objects.Name:GetPropertyChangedSignal("FontFace"):Connect(function()
-                Objects.Name.Position = UDim2.new(0, 0, 0, -(Objects.Name.AbsoluteSize.Y + 3))
-            end))
-
-            Utility.Signal(Objects.Name:GetPropertyChangedSignal("TextSize"):Connect(function()
-                Objects.Name.Position = UDim2.new(0, 0, 0, -(Objects.Name.AbsoluteSize.Y + 3))
-            end))
-
-            Objects.HealthBarOutline = Utility.New("Frame", {
-                BackgroundTransparency = 0,
-                BorderSizePixel = 0,
-                Visible = true,
-                BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-                Parent = Objects.BoxHolder,
-                Size = UDim2.new(0, 4, 1, 0),
-                Position = UDim2.new(0, -5, 0, 0),
-            })
-
-            Utility.New("UIPadding", {
-                Parent = Objects.HealthBarOutline,
-                PaddingLeft = UDim.new(0, 1),
-                PaddingRight = UDim.new(0, 1),
-                PaddingTop = UDim.new(0, 1),
-                PaddingBottom = UDim.new(0, 1),
-            })
-
-            Objects.HealthBar = Utility.New("Frame", {
-                BackgroundTransparency = 0,
-                BorderSizePixel = 0,
-                Visible = true,
-                BackgroundColor3 = Color3.fromRGB(255, 0, 0),
-                Parent = Objects.HealthBarOutline,
-                Size = UDim2.new(1, 0, -0.5, 0),
-                Position = UDim2.new(0, 0, 1, 0),
-            })
-
-            Objects.HealthNumber = Utility.New("TextLabel", {
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 0, 0, 0),
-                Size = UDim2.new(0, 0, 0, 0),
-                FontFace = Fonts.Get("TahomaXP"), 
-                AutomaticSize = Enum.AutomaticSize.XY,
-                Parent = Objects.BoxHolder,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Center,
-                TextStrokeTransparency = 0,
-            })
-
-            Objects.Tool = Utility.New("TextLabel", {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 0),
-                FontFace = Fonts.Get("TahomaXP"), 
-                AutomaticSize = Enum.AutomaticSize.Y,
-                Parent = Objects.BottomHolder,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Center,
-                TextStrokeTransparency = 0,
-            })
-
-            Objects.Distance = Utility.New("TextLabel", {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 0),
-                FontFace = Fonts.Get("TahomaXP"), 
-                AutomaticSize = Enum.AutomaticSize.Y,
-                Parent = Objects.BottomHolder,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Center,
-                TextStrokeTransparency = 0,
-            })
-
-            Objects.Team = Utility.New("TextLabel", {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 0),
-                FontFace = Fonts.Get("TahomaXP"), 
-                AutomaticSize = Enum.AutomaticSize.Y,
-                Parent = Objects.RightHolder,
-                TextSize = 12,
-                TextStrokeTransparency = 0,
-                TextXAlignment = Enum.TextXAlignment.Left,
-            })
-
-            Objects.God = Utility.New("TextLabel", {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 0),
-                FontFace = Fonts.Get("TahomaXP"), 
-                AutomaticSize = Enum.AutomaticSize.Y,
-                Parent = Objects.RightHolder,
-                TextSize = 12,
-                TextStrokeTransparency = 0,
-                TextXAlignment = Enum.TextXAlignment.Left,
-            })
-
-            Objects.Target = Utility.New("TextLabel", {
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 0),
-                FontFace = Fonts.Get("TahomaXP"), 
-                AutomaticSize = Enum.AutomaticSize.Y,
-                Parent = Objects.RightHolder,
-                TextSize = 12,
-                TextStrokeTransparency = 0,
-                TextXAlignment = Enum.TextXAlignment.Left,
-            })
-
-            Objects.ViewAngles = Utility.New("Frame", {
-                Name = "ViewAngles",
-                BorderSizePixel = 0,
-                Parent = Objects.Holder,
-                Size = UDim2.new(0, 0, 0, 0),
-                Position = UDim2.new(0, 0, 1, 0),
-                AnchorPoint = (Vector2.one * .5)
-            })
-
-            return Objects
-        end
-
-        function Esp.BoundingBox(torso)
-            local UpVector = Camera.CFrame.UpVector
-
-            local TopPosition = torso.Position + torso.CFrame:VectorToWorldSpace(Vector3.new(0, 1.8, 0)) + UpVector
-            local BottomPosition = torso.Position + torso.CFrame:VectorToWorldSpace(Vector3.new(0, -2.5, 0)) - UpVector
-    
-            local TopViewport = Camera:WorldToViewportPoint(TopPosition)
-            local BottomViewport = Camera:WorldToViewportPoint(BottomPosition)
-            
-            local Width = math.max(math.abs(TopViewport.X - BottomViewport.X), 3)
-            local Height = math.max(math.abs(BottomViewport.Y - TopViewport.Y), Width / 2, 3)
-    
-            local BoxSize = Vector2.new(math.floor(Height / 1.5), math.floor(Height))
-            local BoxPosition = Vector2.new(
-                math.floor((TopViewport.X + BottomViewport.X) / 2 - BoxSize.X / 2),
-                math.floor(math.min(TopViewport.Y, BottomViewport.Y))
-            )
-            
-            return BoxPosition, BoxSize
-        end
-
-        function Esp.RegisterPlayer(player)
-            local Struct = {}
-            
-            Struct.Objects = Esp.Objects(); local Objects = Struct.Objects
-            Struct.Info = PlayerInfo.GetInfo(player); local Info = Struct.Info; local Data = nil
-            
-            Struct.Render = false
-            Struct.Prefix = "enemy_"
-
-            Struct.Health = 0
-
-            Struct.Flag = function(flag)
-                return Library.Flags[string.format( "%s%s", Struct.Prefix, flag )]
-            end
-
-            Struct.Transparency = function(flag)
-                return Library.Flags[string.format( "%s%s", Struct.Prefix, flag )].a
-            end
-
-            Struct.Casing = function(text)
-                text = string.sub(text, 1, Struct.Flag("text_length"))
-
-                local Case = Struct.Flag("text_case")
-
-                if Case == "Normal" then
-                    return text
-                elseif Case == "UPPERCASE" then
-                    return text:upper()
-                elseif Case == "lowercase" then
-                    return text:lower()
-                end
-            end
-            
-            Struct.OnScreen = function()
-                Objects.Holder.Visible = Struct.Render
-                
-                if not Struct.Render then
-                    return
-                end
-
-                local Position, Size = Esp.BoundingBox(Data.Torso)
-
-                local BoxHolder = Objects.BoxHolder
-
-                BoxHolder.Size = UDim2.new(0, Size.x, 0, Size.y)
-                BoxHolder.Position = UDim2.new(0, Position.x, 0, Position.y)
-
-                local Box = Objects.Box
-                local BoxInline = Objects.BoxInline
-                local BoxOutline = Objects.BoxOutline
-
-                Box.Visible = Struct.Flag("box")
-                if Box.Visible then
-                    BoxInline.Color = Struct.Flag("box_c").c
-                    BoxInline.Transparency = Struct.Transparency("box_c")
-
-                    BoxOutline.Color = Struct.Flag("box_o").c
-                    BoxOutline.Transparency = Struct.Transparency("box_o")
-                end
-
-                local Name = Objects.Name
-
-                Name.Visible = Struct.Flag("name")
-                if Name.Visible then
-                    Name.Text = Struct.Casing(Struct.Flag("name_display") and Data.DisplayName or Data.Name)
-
-                    Name.FontFace = Fonts.Get(Struct.Flag("name_font"))
-                    Name.TextSize = Struct.Flag("name_size")
-
-                    Name.TextColor3 = Struct.Flag("name_c").c
-                    Name.TextTransparency = Struct.Transparency("name_c")
-                end
-
-                local HealthBar = Objects.HealthBar
-                local HealthBarOutline = Objects.HealthBarOutline
-                local HealthBarVisible = Struct.Flag("health_bar")
-
-                HealthBarOutline.Visible = HealthBarVisible
-
-                if HealthBarVisible then
-                    HealthBarOutline.BackgroundColor3 = Struct.Flag("health_bar_o").c
-                    HealthBarOutline.BackgroundTransparency = Struct.Transparency("health_bar_o")
-
-                    HealthBar.BackgroundColor3 = Struct.Flag("health_bar_c").c
-                    HealthBar.BackgroundTransparency = Struct.Transparency("health_bar_c")
-
-                    HealthBar.Size = UDim2.new(1, 0, -(Struct.Health / Data.MaxHealth), 0)
-                end
-
-                local HealthNumber = Objects.HealthNumber
-                local FollowHealthBar = Struct.Flag("health_number_follow")
-
-                HealthNumber.Visible = Struct.Flag("health_number") and Struct.Health <= Struct.Flag("health_number_cap")
-
-                if HealthNumber.Visible then
-                    HealthNumber.Text = math.floor(Struct.Health)
-
-                    HealthNumber.TextColor3 = Struct.Flag("health_number_c").c
-                    HealthNumber.TextTransparency = Struct.Transparency("health_number_c")
-
-                    HealthNumber.FontFace = Fonts.Get(Struct.Flag("health_number_font"))
-                    HealthNumber.TextSize = Struct.Flag("health_number_size")
-
-                    HealthNumber.Parent = FollowHealthBar and HealthBar or BoxHolder
-                    
-                    if FollowHealthBar then
-                        HealthNumber.Position = UDim2.new(0, -HealthNumber.AbsoluteSize.X / 2, 0, -HealthNumber.AbsoluteSize.Y / 2)
-                    else
-                        HealthNumber.Position = UDim2.new(0, -(HealthNumber.AbsoluteSize.X + (HealthBarVisible and HealthBarOutline.AbsoluteSize.X or 0) + 2), 0, -2)
-                    end
-                end
-
-                local Tool = Objects.Tool
-
-                Tool.Visible = Struct.Flag("tool")
-                if Tool.Visible then
-                    Tool.Text = Struct.Casing(Data.Tool and Data.Tool or "None")
-
-                    Tool.FontFace = Fonts.Get(Struct.Flag("tool_font"))
-                    Tool.TextSize = Struct.Flag("tool_size")
-
-                    Tool.TextColor3 = Struct.Flag("tool_c").c
-                    Tool.TextTransparency = Struct.Transparency("tool_c")
-                end
-
-                local Distance = Objects.Distance
-
-                Distance.Visible = Struct.Flag("distance") and Struct.Distance
-                if Distance.Visible then
-                    Distance.Text = Struct.Casing(string.format("%s St", Struct.Distance))
-
-                    Distance.FontFace = Fonts.Get(Struct.Flag("distance_font"))
-                    Distance.TextSize = Struct.Flag("distance_size")
-
-                    Distance.TextColor3 = Struct.Flag("distance_c").c
-                    Distance.TextTransparency = Struct.Transparency("distance_c")
-                end
-
-                local Team = Objects.Team
-
-                Team.Visible = Struct.Flag("team") and Data.Team
-                if Team.Visible then
-                    Team.Text = Struct.Casing(Data.Team.Name)
-
-                    Team.FontFace = Fonts.Get(Struct.Flag("team_font"))
-                    Team.TextSize = Struct.Flag("team_size")
-
-                    if Struct.Flag("team_use_c") then
-                        Team.TextColor3 = Data.Team.TeamColor.Color
-                    else
-                        Team.TextColor3 = Struct.Flag("team_c").c
-                    end
-
-                    Team.TextTransparency = Struct.Transparency("team_c")
-                end
-
-                local God = Objects.God
-
-                God.Visible = Struct.Flag("god") and Data.Character:FindFirstChildWhichIsA("ForceField")
-
-                if God.Visible then
-                    God.Text = Struct.Casing("God")
-
-                    God.FontFace = Fonts.Get(Struct.Flag("god_font"))
-                    God.TextSize = Struct.Flag("god_size")
-
-                    God.TextColor3 = Struct.Flag("god_c").c
-                    God.TextTransparency = Struct.Transparency("god_c")
-                end
-
-                local ViewAngles = Objects.ViewAngles
-                
-                ViewAngles.Visible = Struct.Flag("viewangles") and Data.Head
-                if ViewAngles.Visible then
-                    ViewAngles.BackgroundColor3 = Struct.Flag("viewangles_c").c
-                    ViewAngles.BackgroundTransparency = Struct.Transparency("viewangles_c")
-
-                    local HeadTo, _ = Camera:WorldToViewportPoint((Data.Head.CFrame * CFrame.new(0, 0, -Struct.Flag("viewangles_l"))).Position)
-                    local HeadFrom, _ = Camera:WorldToViewportPoint(Data.Head.Position)
-
-                    Utility.LineMath(ViewAngles, Vector2.new(HeadFrom.X, HeadFrom.Y), Vector2.new(HeadTo.X, HeadTo.Y), Struct.Flag("viewangles_t"))
-                end
-
-                local Target = Objects.Target
-
-                Target.Visible = Struct.Flag("target") and Legitbot.IsTarget(player)
-                if Target.Visible then
-                    Target.TextColor3 = Struct.Flag("target_c").c
-                    Target.TextTransparency = Struct.Transparency("target_c")
-                    
-                    Target.Text = Struct.Casing("Target")
-
-                    Target.FontFace = Fonts.Get(Struct.Flag("target_font"))
-                    Target.TextSize = Struct.Flag("target_size")
-                end
-            end
-
-            Struct.OffScreen = function()
-                Objects.Holder.Visible = false
-            end
-            
-            Struct.Step = Utility.Connect(RunService.Heartbeat:Connect(LPH_NO_VIRTUALIZE(function()
-                Info = PlayerInfo.GetInfo(player)
-                Data = Info and Info.Data
-
-                Struct.Distance = Data and Data.Torso and (LocalPlayerData and LocalPlayerData.Data and LocalPlayerData.Data.Torso and math.floor((Data.Torso.Position - LocalPlayerData.Data.Torso.Position).Magnitude) or nil)
-
-                Struct.Prefix = Data and Data.IsTeammate and "team_" or "enemy_"
-                Struct.Render = Data and Data.Alive and Struct.Flag("enabled")
-
-                if Struct.Flag("limit_distance") and (Struct.Distance or 0) >= Struct.Flag("limit_distance_amount") then
-                    Struct.Render = false
-                end
-
-                if Struct.Render then
-                    Struct.Health = Utility.Lerp(Struct.Health, Data.Health, Struct.Flag("health_fade"))
-
-                    local _, OnScreen = Camera:WorldToViewportPoint(Data.Torso.Position)
-
-                    if OnScreen then
-                        Struct.OnScreen()
-                    else
-                        Struct.OffScreen()
-                    end
-                else
-                    Objects.Holder.Visible = false
-                end
-            end)))
-
-            -- remove the player
-            Struct.Destroy = function()
-                for _,object in Struct.Objects do
-                    object:Destroy()
-                end
-
-                Struct.Step:Disconnect()
-
-                Esp.Players[player] = nil
-            end
-            
-            Debugging.Log( "ESP", "PlayerAdded", player )
-
-            Esp.Players[player] = Struct
-        end
-
-        function Esp.RemovePlayer(player)
-            local Struct = Esp.Players[player]
-
-            if Struct then
-                Struct.Destroy()
-
-                Debugging.Log( "ESP", "RemovePlayer", player )
-            end
-        end
-
-        for _,player in PlayerInfo.GetPlayers() do
-            if player == LocalPlayer then
-                continue
-            end
-            
-            if not player:IsA("Player") then
-                continue
-            end
-
-            Esp.RegisterPlayer(player)
-        end
-        Utility.Connect(PlayerInfo.PlayerAdded:Connect(function(player, isplayer)
-            if not isplayer then
-                return
-            end
-
-            Esp.RegisterPlayer(player)
-        end))
-        Utility.Connect(PlayerInfo.PlayerRemoved:Connect(function(player)
-            Esp.RemovePlayer(player)
-        end))
-    end; Env.Lumora.Esp = Esp
---
-
--- misc 
-    local Misc = { }; do 
-        Misc.GetDirection = function( ) end 
-        
-    end
--- 
-
--- toggles
-    local TweenTypes = {}
-
-    for _,v in Enum.EasingStyle:GetEnumItems() do 
-        table.insert(TweenTypes, v.Name)
-    end
-
-    local FontNames = {}
-
-    for font,_ in Fonts.Data do
-        table.insert(FontNames, font)
-    end
-
-    local Skyboxes = { "None" }
-
-    for name,_ in Visuals.World.Skyboxes do
-        table.insert(Skyboxes, name)
-    end
-
-    local Window = Library:Window({
-        Name = "Lumora",
-        Size = UDim2.fromOffset(540, 450),
-        Open = false
-    }); local Watermark = Library.Watermark({}) --
-        Window:Info({Name = "Combat"}) do
-            local Legit = Window:Tab({Name = "Legitbot", Icon = "rbxassetid://91935352667560"}) do
-                local Aimbot = Legit:Section({Name = "Aimbot"}) do
-                    Aimbot:Toggle({Name = "Enabled", Flag = "aimbot"})
-                        :Keybind({Name = "Aimbot", Flag = "aimbot_key"})
-
-                    Aimbot:Dropdown({Name = "Hitboxes", Values = Legitbot.Groups, Value = {"Head", "Torso"}, Multi = true, Flag = "aimbot_hitboxes"})
-
-                    Aimbot:Slider({Name = "Smoothing", Suffix = "%d", Value = 10, Min = 1, Max = 100, Flag = "aimbot_smoothing"})
-
-                    Aimbot:Dropdown({Name = "Origin", Values = {"Mouse", "Screen"}, Value = "Mouse", Flag = "aimbot_origin"})
-
-                    Aimbot:Dropdown({Name = "Prediction Type", Values = {"Off", "Trajectory", "Velocity"}, Value = "Off", Flag = "aimbot_prediction"})
-                    Aimbot:Slider({Name = "Amount", Suffix = "%s", Value = 1, Min = 0.1, Max = 4, Float = 0.1, Flag = "aimbot_prediction_amount"})
-                    
-                    local UseFov = Aimbot:Toggle({Name = "Use Field of View", Flag = "aimbot_use_fov", Children = true})
-                    UseFov:Slider({Name = "Amount", Suffix = "%d°", Value = 40, Min = 0, Max = 360, Flag = "aimbot_fov"})
-
-                    local UseDead = Aimbot:Toggle({Name = "Use Deadzone", Flag = "aimbot_use_deadzone", Children = true})
-                    UseDead:Slider({Name = "Amount", Suffix = "%d°", Value = 10, Min = 0, Max = 100, Flag = "aimbot_deadzone"})
-
-                    local LimitDistance = Aimbot:Toggle({Name = "Limit Distance", Flag = "aimbot_limit_distance", Children = true})
-                    LimitDistance:Slider({Name = "Amount", Suffix = "%dst", Value = 500, Min = 0, Max = 1000, Flag = "aimbot_limit_distance_amount"})
-
-                    local HealthCheck = Aimbot:Toggle({Name = "Health Check", Flag = "aimbot_health_check", Children = true})
-                    HealthCheck:Slider({Name = "Amount", Suffix = "%dhp", Value = 100, Min = 0, Max = 100, Flag = "aimbot_health_check_amount"})
-
-                    Aimbot:Toggle({Name = "Team Check", Flag = "aimbot_team_check"})
-                    Aimbot:Toggle({Name = "Ignore God", Description = "Ignores players with a forcefield which means they can't get killed.", Flag = "aimbot_ignore_god"})
-
-                    Aimbot:Dropdown({Name = "Type", Values = {"Mouse", "Camera"}, Value = "Camera", Flag = "aimbot_type"})
-                    Aimbot:Toggle({Name = "Bind To RenderStep", Description = "Use this if you can't use the camera type on games.", Flag = "aimbot_bind"})
-                end
-            end
-        end
-
-        Window:Info({Name = "Visuals"}) do
-            local Main = Window:Tab({Name = "Main", Icon = "rbxassetid://13706100199"}) do
-                local World = Main:Section({Name = "World"}) do
-                    local Time = World:Toggle({Name = "Time Changer", Flag = "world_time_changer", Children = true, Callback = function() Visuals.World.Think("TimeOfDay") end})
-                    Time:Slider({Name = "Hour", Suffix = "%dhr", Value = Lighting.ClockTime, Min = 0, Max = 24, Flag = "world_time_changer_hour", Callback = function() Visuals.World.Think("TimeOfDay") end})
-
-                    local Ambience = World:Toggle({Name = "Ambience", Flag = "world_ambience", Callback = function() Visuals.World.Think("Lighting") end})
-                    Ambience:Colorpicker({Name = "Outside Ambient", Flag = "world_ambience_outside", Value = Lighting.OutdoorAmbient, Callback = function() Visuals.World.Think("Lighting") end})
-                    Ambience:Colorpicker({Name = "Inside Ambient", Flag = "world_ambience_inside", Value = Lighting.Ambient, Callback = function() Visuals.World.Think("Lighting") end})
-
-                    World:Slider({Name = "Brightness", Flag = "world_brightness", Min = 0, Max = 1, Value = Lighting.Brightness, Float = 0.01, Callback = function() Visuals.World.Think("Lighting") end})
-                
-                    local Bloom = World:Toggle({Name = "Bloom", Flag = "world_bloom", Callback = function() Visuals.World.Think("Bloom") end})
-                    
-                    local BloomPopup = Bloom:Popup() do
-                        BloomPopup:Slider({Name = "Intensity", Flag = "world_bloom_intensity", Min = 0, Max = 1, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("Bloom") end})
-                        BloomPopup:Slider({Name = "Size", Flag = "world_bloom_size", Min = 0, Max = 100, Value = 1, Callback = function() Visuals.World.Think("Bloom") end})
-                        BloomPopup:Slider({Name = "Threshold", Flag = "world_bloom_threshold", Min = 0, Max = 1, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("Bloom") end})    
-                    end
-                    
-                    local ColorCorrection = World:Toggle({ Name = "Color Correction", Flag = "world_color_correction", Callback = function() Visuals.World.Think("ColorCorrection") end })
-                    
-                    local ColorCorrectionPopup = ColorCorrection:Popup() do
-                        ColorCorrectionPopup:Slider({Name = "Saturation", Flag = "world_color_correction_saturation", Min = 0, Max = 1, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("ColorCorrection") end});
-                        ColorCorrectionPopup:Slider({Name = "Contrast", Flag = "world_color_correction_contrast", Min = 0, Max = 1, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("ColorCorrection") end})
-                    end
-
-                    ColorCorrection:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = "world_color_correction_color", Callback = function() Visuals.World.Think("ColorCorrection") end})
-                    
-                    local Atmosphere = World:Toggle({ Name = "Atmosphere", Flag = "world_atmosphere", Callback = function() Visuals.World.Think("Atmosphere") end })
-                   
-                    local AtmospherePopup = Atmosphere:Popup() do
-                        AtmospherePopup:Slider({ Name = "Density", Flag = "world_atmosphere_density", Min = 0, Max = 1, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("Atmosphere") end })
-                        AtmospherePopup:Slider({ Name = "Offset", Flag = "world_atmosphere_offset", Min = 0, Max = 1, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("Atmosphere") end })
-                        AtmospherePopup:Slider({ Name = "Haze", Flag = "world_atmosphere_haze", Min = 0, Max = 5, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("Atmosphere") end })
-                        AtmospherePopup:Slider({ Name = "Glare", Flag = "world_atmosphere_glare", Min = 0, Max = 5, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("Atmosphere") end })
-                    end
-
-                    Atmosphere:Colorpicker({ Value = Color3.fromRGB(255, 255, 255), Flag = "world_atmosphere_color", Callback = function() Visuals.World.Think("Atmosphere") end })
-                    Atmosphere:Colorpicker({ Value = Color3.fromRGB(255, 255, 255), Flag = "world_atmosphere_dark_color", Callback = function() Visuals.World.Think("Atmosphere") end })
-
-                    local Sunray = World:Toggle({ Name = "Sunray", Flag = "world_sunray", Callback = function() Visuals.World.Think("SunRay") end })
-                    
-                    local SunrayPopup = Sunray:Popup() do
-                        SunrayPopup:Slider({ Name = "Intensity", Flag = "world_sunray_intensity", Min = 0, Max = 1, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("SunRay") end })
-                        SunrayPopup:Slider({ Name = "Spread", Flag = "world_sunray_spread", Min = 0, Max = 1, Value = 0.01, Float = 0.01, Callback = function() Visuals.World.Think("SunRay") end })
-                    end
-
-                    World:Dropdown({ Name = "Skybox", Flag = "world_skybox", Values = Skyboxes, Value = "None", Callback = function() Visuals.World.Think("Sky") end })
-                    World:Slider({ Name = "Star Count", Flag = "world_skybox_star_count", Min = 0, Max = 5000, Value = 500, Callback = function() Visuals.World.Think("Sky") end })
-                end
-
-                local Camera = Main:Section({Name = "Camera", Side = "Right"}) do
-                    local Fov = Camera:Toggle({Name = "Field of View Changer", Flag = "camera_fov", Children = true})
-                    Fov:Slider({Name = "Amount", Suffix = "%d°", Min = 0, Value = Camera.FieldOfView, Max = 120, Flag = "camera_fov_amount"})
-
-                    local AspectRatio = Camera:Toggle({Name = "Aspect Ratio Changer", Flag = "camera_aspect_ratio", Children = true})
-                    AspectRatio:Slider({Name = "Horizontal", Value = 100, Min = 0, Max = 100, Float = 1, Flag = "camera_aspect_ratio_horizontal"})
-                    AspectRatio:Slider({Name = "Vertical", Value = 100, Min = 0, Max = 100, Float = 1, Flag = "camera_aspect_ratio_vertical"})
-
-                    local Thirdperson = Camera:Toggle({Name = "Third Person", Flag = "camera_third_person", Children = true})
-                    Thirdperson:Keybind({Name = "Third Person", Flag = "camera_third_person_key"})
-                    Thirdperson:Slider({Name = "X Position", Suffix = "%dst", Value = 0, Min = -10, Max = 10, Float = 1, Flag = "camera_third_person_x"})
-                    Thirdperson:Slider({Name = "Y Position", Suffix = "%dst", Value = 0, Min = -10, Max = 10, Float = 1, Flag = "camera_third_person_y"})
-                    Thirdperson:Slider({Name = "Z Position", Suffix = "%dst", Value = 0, Min = -10, Max = 10, Float = 1, Flag = "camera_third_person_z"})
-                end
-
-                local Interface = Main:Section({Name = "Interface", Side = "Right"}) do
-                    local Aimbot = Interface:Toggle({Name = "Aimbot Field of View", Flag = "aimbot_show_fov", Callback = function(v)
-                        Legitbot.HandleCircle(Legitbot.Aimbot.Circle, Legitbot.Origin(Library.Flags["aimbot_origin"]), Library.Flags["aimbot_fov"], Library.Flags["aimbot_use_fov"] and v, Library.Flags["aimbot_show_fov_spin"], Library.Flags["aimbot_show_fov_spin_speed"])
-                    end})
-
-                    local AimbotPopup = Aimbot:Popup({Size = 160}) do                        
-                        AimbotPopup:Colorpicker({Name = "From", Color = Color3.fromRGB(255, 255, 255), Flag = "aimbot_show_fov_from", Callback = function(v)
-                            Legitbot.CircleColor(Legitbot.Aimbot.Circle, v, Library.Flags["aimbot_show_fov_to"], Library.Flags["aimbot_show_fov_outline_from"], Library.Flags["aimbot_show_fov_outline_to"])
-                        end})
-                        AimbotPopup:Colorpicker({Name = "To", Color = Color3.fromRGB(255, 255, 255), Flag = "aimbot_show_fov_to", Callback = function(v)
-                            Legitbot.CircleColor(Legitbot.Aimbot.Circle, Library.Flags["aimbot_show_fov_from"], v, Library.Flags["aimbot_show_fov_outline_from"], Library.Flags["aimbot_show_fov_outline_to"])
-                        end})
-                        AimbotPopup:Colorpicker({Name = "Outline From", Color = Color3.fromRGB(255, 255, 255), Flag = "aimbot_show_fov_outline_from", Callback = function(v)
-                            Legitbot.CircleColor(Legitbot.Aimbot.Circle, Library.Flags["aimbot_show_fov_from"], Library.Flags["aimbot_show_fov_to"], v, Library.Flags["aimbot_show_fov_outline_to"])
-                        end})
-                        AimbotPopup:Colorpicker({Name = "Outline To", Color = Color3.fromRGB(255, 255, 255), Flag = "aimbot_show_fov_outline_to", Callback = function(v)
-                            Legitbot.CircleColor(Legitbot.Aimbot.Circle, Library.Flags["aimbot_show_fov_from"], Library.Flags["aimbot_show_fov_to"], Library.Flags["aimbot_show_fov_outline_from"], v)
-                        end})
-
-                        AimbotPopup:Toggle({Name = "Spin Animation", Flag = "aimbot_show_fov_spin"})
-                        AimbotPopup:Slider({Name = "Spin Speed", Suffix = "%drad/s", Float = 1, Value = 0, Min = 0, Max = 250, Flag = "aimbot_show_fov_spin_speed"})
-                    end
-                end
-            end
-        end
-
-        Window:Info({Name = "ESP"}); do
-            local Enemy = Window:Tab({Name = "Enemy", Icon = "rbxassetid://72184874365755"}) do
-                local Flag = "enemy_"
-
-                local Master = Enemy:Section({Name = "Master"}) do
-                    Master:Toggle({Name = "Enabled", Flag = string.format("%senabled", Flag)})
-
-                    local Distance = Master:Toggle({Name = "Limit Distance", Flag = string.format("%slimit_distance", Flag), Children = true})
-
-                    Distance:Slider({Name = "Amount", Suffix = "%sst", Min = 0, Value = 500, Max = 1000, Flag = string.format("%slimit_distance_amount", Flag)})
-
-                    Master:Dropdown({Name = "Text Case", Flag = string.format("%stext_case", Flag), Values = {
-                        "Normal",
-                        "UPPERCASE",
-                        "lowercase"
-                    }, Value = "Normal"})
-
-                    Master:Slider({Name = "Max Text Length", Min = 1, Max = 25, Value = 18, Flag = string.format("%stext_length", Flag)})
-
-                    Master:Slider({Name = "Health Fading Speed", Min = 0, Max = 1, Float = 0.01, Value = 0.1, Flag = string.format("%shealth_fade", Flag)})
-                end
-
-                local ThreeD = Enemy:Section({Name = "3D"}) do
-                    local Chams = ThreeD:Toggle({Name = "Chams", Description = "Draws a material over the player, which makes it easier to see the player.", Flag = string.format("%schams", Flag)})
-
-                    local ChamsPopup = Chams:Popup({Size = 160}) do
-                        ChamsPopup:Toggle({Name = "Always On Top", Flag = string.format("%schams_on_top", Flag)})
-                    end
-
-                    Chams:Colorpicker({Name = "Color", Value = Color3.fromRGB(255, 0, 0), Flag = string.format("%schams_c", Flag)})
-                    Chams:Colorpicker({Name = "Outline", Value = Color3.fromRGB(0, 0, 0), Flag = string.format("%schams_o", Flag)})
-
-                    local Viewangles = ThreeD:Toggle({Name = "View Angles", Description = "Shows where the player is looking at.", Flag = string.format("%sviewangles", Flag)})
-
-                    local ViewanglesPopup = Viewangles:Popup({Size = 160}) do
-                        ViewanglesPopup:Slider({Name = "Length", Min = 1, Max = 30, Value = 5, Flag = string.format("%sviewangles_l", Flag)})
-                        ViewanglesPopup:Slider({Name = "Thickness", Min = 1, Max = 4, Value = 2, Flag = string.format("%sviewangles_t", Flag)})
-                    end
-
-                    Viewangles:Colorpicker({Name = "Color", Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%sviewangles_c", Flag)})
-                end
-
-                local TwoD = Enemy:Section({Name = "2D", Side = "Right"}) do
-                    local Box = TwoD:Toggle({Name = "Bounding Box", Flag = string.format("%sbox", Flag)})
-                    Box:Colorpicker({Name = "Color", Value = Color3.fromRGB(255, 0, 0), Flag = string.format("%sbox_c", Flag)})
-                    Box:Colorpicker({Name = "Outline", Value = Color3.fromRGB(0, 0, 0), Flag = string.format("%sbox_o", Flag)})
-
-                    local Name = TwoD:Toggle({Name = "Name", Flag = string.format("%sname", Flag)})
-                    
-                    local NamePopup = Name:Popup({Size = 160}) do
-                        NamePopup:Toggle({Name = "Use Display Name", Flag = string.format("%sname_display", Flag)})
-                        NamePopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%sname_font", Flag)})
-                        NamePopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%sname_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Name:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%sname_c", Flag)})
-
-                    local HealthNum = TwoD:Toggle({Name = "Health Number", Flag = string.format("%shealth_number", Flag)})
-
-                    local HealthPopup = HealthNum:Popup({Size = 165}) do
-                        HealthPopup:Toggle({Name = "Follow Health Bar", Flag = string.format("%shealth_number_follow", Flag)})
-
-                        HealthPopup:Slider({Name = "Max Visibility Cap", Min = 1, Max = 100, Value = 100, Flag = string.format("%shealth_number_cap", Flag)})
-
-                        HealthPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%shealth_number_font", Flag)})
-
-                        HealthPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%shealth_number_size", Flag), Suffix = "%spx"})
-                    end
-
-                    HealthNum:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%shealth_number_c", Flag)})
-
-                    local HealthBar = TwoD:Toggle({Name = "Health Bar", Flag = string.format("%shealth_bar", Flag)})
-
-                    HealthBar:Colorpicker({Value = Color3.fromRGB(0, 255, 0), Flag = string.format("%shealth_bar_c", Flag)})
-
-                    HealthBar:Colorpicker({Value = Color3.fromRGB(0, 0, 0), Flag = string.format("%shealth_bar_o", Flag)})
-
-                    local Tool = TwoD:Toggle({Name = "Tool", Flag = string.format("%stool", Flag)})
-
-                    local ToolPopup = Tool:Popup({Size = 160}) do
-                        ToolPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%stool_font", Flag)})
-
-                        ToolPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%stool_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Tool:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%stool_c", Flag)})
-
-                    local Distance = TwoD:Toggle({Name = "Distance", Flag = string.format("%sdistance", Flag)})
-
-                    local DistancePopup = Distance:Popup({Size = 160}) do
-                        DistancePopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%sdistance_font", Flag)})
-
-                        DistancePopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%sdistance_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Distance:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%sdistance_c", Flag)})
-
-                    local Team = TwoD:Toggle({Name = "Team", Flag = string.format("%steam", Flag)})
-
-                    local TeamPopup = Team:Popup({Size = 160}) do
-                        TeamPopup:Toggle({Name = "Use Team Color", Flag = string.format("%steam_use_c", Flag)})
-
-                        TeamPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%steam_font", Flag)})
-
-                        TeamPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%steam_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Team:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%steam_c", Flag)})
-
-                    local God = TwoD:Toggle({Name = "God", Description = "Will show a flag if the player has a forcefield which means they can't get killed.", Flag = string.format("%sgod", Flag)})
-
-                    local GodPopup = God:Popup({Size = 160}) do
-                        GodPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%sgod_font", Flag)})
-
-                        GodPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%sgod_size", Flag), Suffix = "%spx"})
-                    end
-
-                    God:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%sgod_c", Flag)})
-
-                    local Target = TwoD:Toggle({Name = "Target", Flag = string.format("%starget", Flag)})
-
-                    local TargetPopup = Target:Popup({Size = 160}) do
-                        TargetPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%starget_font", Flag)})
-
-                        TargetPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%starget_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Target:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%starget_c", Flag)})
-
-                    
-                end
-            end
-
-            local Team = Window:Tab({Name = "Team", Icon = "rbxassetid://120297514652092"}) do
-                local Flag = "team_"
-
-                local Master = Team:Section({Name = "Master"}) do
-                    Master:Toggle({Name = "Enabled", Flag = string.format("%senabled", Flag)})
-
-                    local Distance = Master:Toggle({Name = "Limit Distance", Flag = string.format("%slimit_distance", Flag), Children = true})
-
-                    Distance:Slider({Name = "Amount", Suffix = "%sst", Min = 0, Value = 500, Max = 1000, Flag = string.format("%slimit_distance_amount", Flag)})
-
-                    Master:Dropdown({Name = "Text Case", Flag = string.format("%stext_case", Flag), Values = {
-                        "Normal",
-                        "UPPERCASE",
-                        "lowercase"
-                    }, Value = "Normal"})
-
-                    Master:Slider({Name = "Max Text Length", Min = 1, Max = 25, Value = 18, Flag = string.format("%stext_length", Flag)})
-
-                    Master:Slider({Name = "Health Fading Speed", Min = 0, Max = 1, Float = 0.01, Value = 0.1, Flag = string.format("%shealth_fade", Flag)})
-                end
-
-                local ThreeD = Team:Section({Name = "3D"}) do
-                    local Chams = ThreeD:Toggle({Name = "Chams", Description = "Draws a material over the player, which makes it easier to see the player.", Flag = string.format("%schams", Flag)})
-
-                    local ChamsPopup = Chams:Popup({Size = 160}) do
-                        ChamsPopup:Toggle({Name = "Always On Top", Flag = string.format("%schams_on_top", Flag)})
-                    end
-
-                    Chams:Colorpicker({Name = "Color", Value = Color3.fromRGB(255, 0, 0), Flag = string.format("%schams_c", Flag)})
-                    Chams:Colorpicker({Name = "Outline", Value = Color3.fromRGB(0, 0, 0), Flag = string.format("%schams_o", Flag)})
-
-                    local Viewangles = ThreeD:Toggle({Name = "View Angles", Description = "Shows where the player is looking at.", Flag = string.format("%sviewangles", Flag)})
-
-                    local ViewanglesPopup = Viewangles:Popup({Size = 160}) do
-                        ViewanglesPopup:Slider({Name = "Length", Min = 1, Max = 15, Value = 2, Flag = string.format("%sviewangles_l", Flag)})
-                        ViewanglesPopup:Slider({Name = "Thickness", Min = 1, Max = 4, Value = 2, Flag = string.format("%sviewangles_t", Flag)})
-                    end
-
-                    Viewangles:Colorpicker({Name = "Color", Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%sviewangles_c", Flag)})
-                end
-
-                local TwoD = Team:Section({Name = "2D", Side = "Right"}) do
-                    local Box = TwoD:Toggle({Name = "Bounding Box", Flag = string.format("%sbox", Flag)})
-                    Box:Colorpicker({Name = "Color", Value = Color3.fromRGB(255, 0, 0), Flag = string.format("%sbox_c", Flag)})
-                    Box:Colorpicker({Name = "Outline", Value = Color3.fromRGB(0, 0, 0), Flag = string.format("%sbox_o", Flag)})
-
-                    local Name = TwoD:Toggle({Name = "Name", Flag = string.format("%sname", Flag)})
-                    
-                    local NamePopup = Name:Popup({Size = 160}) do
-                        NamePopup:Toggle({Name = "Use Display Name", Flag = string.format("%sname_display", Flag)})
-                        NamePopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%sname_font", Flag)})
-                        NamePopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%sname_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Name:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%sname_c", Flag)})
-
-                    local HealthNum = TwoD:Toggle({Name = "Health Number", Flag = string.format("%shealth_number", Flag)})
-
-                    local HealthPopup = HealthNum:Popup({Size = 165}) do
-                        HealthPopup:Toggle({Name = "Follow Health Bar", Flag = string.format("%shealth_number_follow", Flag)})
-
-                        HealthPopup:Slider({Name = "Max Visibility Cap", Min = 1, Max = 100, Value = 100, Flag = string.format("%shealth_number_cap", Flag)})
-
-                        HealthPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%shealth_number_font", Flag)})
-
-                        HealthPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%shealth_number_size", Flag), Suffix = "%spx"})
-                    end
-
-                    HealthNum:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%shealth_number_c", Flag)})
-
-                    local HealthBar = TwoD:Toggle({Name = "Health Bar", Flag = string.format("%shealth_bar", Flag)})
-
-                    HealthBar:Colorpicker({Value = Color3.fromRGB(0, 255, 0), Flag = string.format("%shealth_bar_c", Flag)})
-
-                    HealthBar:Colorpicker({Value = Color3.fromRGB(0, 0, 0), Flag = string.format("%shealth_bar_o", Flag)})
-
-                    local Tool = TwoD:Toggle({Name = "Tool", Flag = string.format("%stool", Flag)})
-
-                    local ToolPopup = Tool:Popup({Size = 160}) do
-                        ToolPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%stool_font", Flag)})
-
-                        ToolPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%stool_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Tool:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%stool_c", Flag)})
-
-                    local Distance = TwoD:Toggle({Name = "Distance", Flag = string.format("%sdistance", Flag)})
-
-                    local DistancePopup = Distance:Popup({Size = 160}) do
-                        DistancePopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%sdistance_font", Flag)})
-
-                        DistancePopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%sdistance_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Distance:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%sdistance_c", Flag)})
-
-                    local Team = TwoD:Toggle({Name = "Team", Flag = string.format("%steam", Flag)})
-
-                    local TeamPopup = Team:Popup({Size = 160}) do
-                        TeamPopup:Toggle({Name = "Use Team Color", Flag = string.format("%steam_use_c", Flag)})
-
-                        TeamPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%steam_font", Flag)})
-
-                        TeamPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%steam_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Team:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%steam_c", Flag)})
-
-                    local God = TwoD:Toggle({Name = "God", Description = "Will show a flag if the player has a forcefield which means they can't get killed.", Flag = string.format("%sgod", Flag)})
-
-                    local GodPopup = God:Popup({Size = 160}) do
-                        GodPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%sgod_font", Flag)})
-
-                        GodPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%sgod_size", Flag), Suffix = "%spx"})
-                    end
-
-                    God:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%sgod_c", Flag)})
-
-                    local Target = TwoD:Toggle({Name = "Target", Flag = string.format("%starget", Flag)})
-
-                    local TargetPopup = Target:Popup({Size = 160}) do
-                        TargetPopup:Dropdown({Name = "Font", Values = FontNames, Value = "TahomaXP", Flag = string.format("%starget_font", Flag)})
-
-                        TargetPopup:Slider({Name = "Size", Min = 1, Max = 20, Value = 12, Flag = string.format("%starget_size", Flag), Suffix = "%spx"})
-                    end
-
-                    Target:Colorpicker({Value = Color3.fromRGB(255, 255, 255), Flag = string.format("%starget_c", Flag)})
-                end
-            end
-
-            local World = Window:Tab({Name = "World", Icon = "rbxassetid://13706097687"}) do
-
-            end
-        end
-    
-        Window:Info({Name = "Miscellaneous"}); local Settings do
-            Window:Tab({Name = "Main", Icon = "rbxassetid://13706099436"})
-            Settings = Window:Tab({Name = "Settings", Icon = "rbxassetid://101519794706741"}) do
-                local Configs = Settings:Section({ Name = "Configurations" }) do
-                    local _, Files = Utility.GetFiles(ConfigFolder, { ".cfg" })
-
-                    local LastFiles = Files
-                    local ConfigName;
-                    local ConfigList = Configs:List({
-                        Name = "Config",
-                        Values = Files,
-                        Value = Files[1] or "",
-                        Size = 278,
-                        Flag = "settings_config_list",
-                        Callback = function(v)
-                            if ConfigName and v then
-                                ConfigName.Set(v)
-                            end
-                        end
-                    })
-                    
-                    ConfigName = Configs:Textbox({
-                        Name = "Config Name",
-                        Value = "",
-                        Flag = "settings_config_name"
-                    })
-
-                    Configs:Button({
-                        Name = "Save Config",
-                        Confirm = true,
-                        Callback = function()
-                            local ConfigName = Library.Flags["settings_config_name"]
-
-                            if ConfigName and ConfigName ~= "" then
-                                local ConfigFilePath = string.format("%s\\%s.cfg", ConfigFolder, ConfigName)
-
-                                if isfile(ConfigFilePath) then
-                                    writefile(ConfigFilePath, Library:GetConfig())
-
-                                    Library.Notification({
-                                        Text = "Configs",
-                                        Description = string.format( "Successfully saved config (%s.cfg).", ConfigName )
-                                    })
-                                    
-                                    local _, Files = Utility.GetFiles(ConfigFolder, { ".cfg" })
-
-                                    ConfigList.Refresh(Files)
-
-                                    ConfigList.Set(ConfigName)
-                                else
-                                    writefile(ConfigFilePath, Library:GetConfig())
-
-                                    Library.Notification({
-                                        Name = "Configs",
-                                        Description = string.format( "Successfully created config (%s.cfg).", ConfigName )
-                                    })
-
-                                    local _, Files = Utility.GetFiles(ConfigFolder, { ".cfg" })
-
-                                    ConfigList.Refresh(Files)
-
-                                    ConfigList.Set(ConfigName)
-                                end
-                            else
-                                Library.Notification({
-                                    Name = "Configs",
-                                    Description = string.format( "Invalid config name (%s)!", ConfigName )
-                                })
-                            end
-                        end, 
-                    })
-
-                    Configs:Button({
-                        Name = "Load Config",
-                        Confirm = true,
-                        Callback = function()
-                            local ConfigName = Library.Flags["settings_config_list"]
-
-                            if ConfigName and ConfigName ~= "" then
-                                local ConfigFilePath = string.format("%s\\%s.cfg", ConfigFolder, ConfigName)
-
-                                if isfile(ConfigFilePath) then
-                                    Library.LoadConfig(readfile(ConfigFilePath))
-
-                                    Library.Notification({
-                                        Name = "Configs",
-                                        Description = string.format( "Successfully loaded config (%s.cfg).", ConfigName )
-                                    })
-                                else
-                                    Library.Notification({
-                                        Name = "Configs",
-                                        Description = string.format( "Couldn't find config (%s.cfg).", ConfigName )
-                                    })
-                                end
-                            end
-                        end,
-                    })
-
-                    Configs:Button({
-                        Name = "Delete Config",
-                        Confirm = true,
-                        Callback = function()
-                            local ConfigName = Library.Flags["settings_config_list"]
-
-                            if ConfigName and ConfigName ~= "" then
-                                local ConfigFilePath = string.format("%s\\%s.cfg", ConfigFolder, ConfigName)
-
-                                if isfile(ConfigFilePath) then
-                                    delfile(ConfigFilePath)
-
-                                    Library.Notification({
-                                        Name = "Configs",
-                                        Description = string.format( "Successfully deleted config (%s.cfg).", ConfigName )
-                                    })
-
-                                    local _, Files = Utility.GetFiles(ConfigFolder, { ".cfg" })
-
-                                    ConfigList.Refresh(Files)
-
-                                    ConfigList.Set(Files[1] or "")
-                                end
-                            end
-                        end,
-                    })
-
-                    task.spawn(function()
-                        while task.wait(5) do
-                            if Window.Visible then
-                                local _, Files = Utility.GetFiles(ConfigFolder, { ".cfg" })
-
-                                if #Files ~= #LastFiles then
-                                    LastFiles = Files
-
-                                    ConfigList.Refresh(Files)
-
-                                    ConfigList.Set(Files[1] or "")
-                                end
-                            end
-                        end
-                    end)
-                end
-
-                local Extra = Settings:Section({ Name = "Extra", Side = "Right" }) do
-                    Extra:Keybind({
-                        Name = "Menu Keybind",
-                        Key = Enum.KeyCode.Delete,
-                        Mode = "Toggle",
-                        Callback = function()
-                            Window.Open()
-                        end
-                    })
-
-                    local Theme = Extra:Label({
-                        Name = "Menu Theme",
-                    })
-
-                    local ThemeHolder = Theme:Popup({ Size = 190 }); do 
-                        for theme, color in Library.Theme do 
-                            ThemeHolder:Colorpicker({
-                                Name = theme,
-                                Value = color,
-                                Flag = "settings_theme_" .. theme,
-                                Callback = function(v)                                    
-                                    Library.UpdateTheme(theme, v.c)
-                                end
-                            })
-                        end 
-                    end
-
-                    Extra:Button({ Name = "Rejoin Game", Confirm = true, Callback = function()
-                        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
-                    end})
-
-                    local FindingServer = false
-
-                    Extra:Button({Name = "Join New Game", Confirm = true, Callback = function()
-                        if FindingServer then
-                            return
-                        end
-
-                        FindingServer = true
-
-                        local Notification = Library.Notification({
-                            Name = "Server Hopper",
-                            Description = "Looking for a server...",
-                            Time = 9e9,
-                            Buttons = { },
-                        })
-        
-                        local SetButtons = false
-                        local JoinGame = false
-                        local ForceShut = false
-                        while task.wait(2) do
-                            local Server;
-
-                            Notification.Description("Looking for a server...")
-
-                            local Success, _ = true, nil;
-                            if not Server then
-                                Success, _ = pcall(function()
-                                    local ServerList = HttpService:JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
-                                    
-                                    if not (ServerList and ServerList.data) then
-                                        ForceShut = true
-
-                                        return false
-                                    end
-                                    
-                                    Server = ServerList.data[math.random(1, table.getn(ServerList.data))]
-
-                                    if Server then
-                                        print(Server.id, #Server.players, Server.ping)
-
-                                        Notification.Description(string.format("Server Found: %s\nPlayers: %s, Ping: %sms", Server.id, tostring(#Server.players), tostring(Server.ping)))
-
-                                        if not SetButtons then
-                                            SetButtons = true
-
-                                            Notification.CreateButton({Text = "Join Server", Callback = function()
-                                                JoinGame = true
-                                            end})
-
-                                            Notification.CreateButton({Text = "Find New Server", Callback = function()
-                                                Server = nil
-                                            end})
-                                        end
-                                    end
-            
-                                    return true
-                                end)
-
-                                print(Success, _)
-                                
-                                Notification.ButtonVisiblity(false)
-                            else
-                                Notification.ButtonVisiblity(true)
-                            end
-
-                            if JoinGame and Server then
-                                FindingServer = false
-                            end
-        
-                            if not Success or ForceShut then
-                                Notification.Description("Failed to get server list...")
-                                Notification.ButtonVisiblity(false)
-                                Notification.SetTime(5)
-                                FindingServer = false
-        
-                                break
-                            end
-                        end
-                    end})
-
-                    Extra:Button({Name = "Copy Join Script", Confirm = true, Callback = function()
-                        Library.Notification({
-                            Name = "Clipboard",
-                            Description = "Successfully copied join script to clipboard!"
-                        })
-        
-                        setclipboard(
-                            string.format(
-                                'game:GetService("TeleportService"):TeleportToPlaceInstance(%s, "%s")',
-                                game.PlaceId,
-                                game.JobId
-                            )
-                        )
-                    end})
-
-                    local WatermarkToggle = Extra:Toggle({
-                        Name = "Watermark",
-                        Flag = "settings_watermark",
-                        Value = true,
-                        Children = true,
-                        Callback = function(v)
-                            Watermark.SetVisible(v)
-                        end
-                    })
-
-                    WatermarkToggle:Label({
-                        Name = "Usable text: {minute} {second} {ap} {month} {day} {year} {fps} {ping} {time} {date} {game} {n}",
-                        Bold = false,
-                        Dark = true,
-                    })
-
-                    WatermarkToggle:Textbox({
-                        Name = "Watermark Text",
-                        Value = "Lumora | {game} | {time} | {date}",
-                        Flag = "settings_watermark_text",
-                        Callback = function(v)
-                            Watermark.SetText(v)
-                        end
-                    })
-
-                    WatermarkToggle:Slider({
-                        Name = "Watermark Rate",
-                        Description = "How fast the watermark will update.",
-                        Flag = "settings_watermark_rate",
-                        Min = 0,
-                        Max = 1000,
-                        Value = 200,
-                        Float = 1,
-                        Callback = function(v)
-                            Watermark.SetRate(v / 1000)
-                        end
-                    })
-
-                    Extra:Dropdown({
-                        Name = "Tween Type",
-                        Description = "Controls what type of tweens the User Interface uses.",
-                        Values = TweenTypes,
-                        Value = "Quad",
-                        Flag = "settings_tween_type",
-                        Callback = function(v)
-                            Library.TweenStyle = Enum.EasingStyle[v]
-                        end
-                    })
-
-                    Extra:Slider({
-                        Name = "Tween Speed",
-                        Description = "Controls how fast the User Interface tweens are.",
-                        Flag = "settings_tween_speed",
-                        Min = 0,
-                        Max = 1,
-                        Value = Library.TweenSpeed,
-                        Float = 0.01,
-                        Callback = function(v)
-                            Library.TweenSpeed = v
-                        end
-                    })
-                end
-            end
-        end
-    --
-
-    task.wait(Library.TweenSpeed)
-
-    Window.Open() 
-
-    task.wait(Library.TweenSpeed)
-
-    Settings.Set(true)
---
-
--- game notifier
-    if Game then
-        Library.Notification({
-            Name = "Lumora",
-            Description = string.format( 'Game "%s" is officialy supported by lumora!', Game.Name ),
-            Type = "Time",
-            Time = 5,
-        })
-    else
-        Library.Notification({
-            Name = "Lumora",
-            Description = "Game is not supported by lumora, some features may not work.",
-            Type = "Time",
-            Time = 5,
-        })
-    end
-
-    Loaded = true
---
+-- Добавляем return для работы через loadstring
+return Library
