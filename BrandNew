@@ -48,6 +48,393 @@ MiscTab = Window:Tab({name = "Misc", icon = "rbxassetid://6031094678"})
 PlayerTab = Window:Tab({name = "Player", icon = "rbxassetid://6031068427"})
 ConfigTab = Window:Tab({name = "Config", icon = "rbxassetid://6031280882"})
 
+-- Создаем секцию Main во вкладке Visuals
+VisualsMainSection = VisualsTab:Section({name = "Main", description = ">_<", side = "right"})
+
+-- Конфигурация трейсеров
+local BulletTracersConfig = {
+    Enabled = false,  -- Включить/выключить трейсеры (true/false)
+    Color1 = Color3.new(1, 1, 1),  -- Начальный цвет трейсера
+    Color2 = Color3.new(1, 1, 1),  -- Конечный цвет трейсера
+    Thickness = 1,  -- Толщина трейсера
+    Texture = "rbxassetid://446111271"  -- Текстура трейсера (Starhook)
+}
+
+-- Состояние оружия
+local gunState = {
+    current_tool = nil,
+    previous_ammo = 0,
+    recently_shot = false,
+    connections = {}
+}
+
+-- Определение игры и путей к пулям
+local function detectGame()
+    local placeId = game.PlaceId
+    
+    local gameData = {
+        -- Da Hood
+        [2788229376] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored.Siren.Radius" },
+        [71189885129233] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" },
+        [5602055394] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" },
+        [17403265390] = { BN = "Part", BBN = "gb", BP = "" },
+        [17403166075] = { BN = "Part", BBN = "gb", BP = "" },
+        [18111448661] = { BN = "Part", BBN = "gb", BP = "" },
+        [15186202290] = { BN = "Part", BBN = "gb", BP = "" },
+        [11143225577] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "" },
+        [15763494605] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "" },
+        [15166543806] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "" },
+        [17897702920] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "" },
+        [16033173781] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored.Siren.Radius" },
+        [7213786345] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored.Siren.Radius" },
+        [9825515356] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" },
+        [16859411452] = { BN = "bulletray", BBN = "beam", BP = "Ignored" },
+        [14277620939] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" },
+        [0] = { BN = "BULLET_RAYS", BBN = "GunBeam", BP = "Ignored" }
+    }
+    
+    local data = gameData[placeId] or gameData[0]
+    return data
+end
+
+-- Получение пути к пулям
+local function getPath(root, path)
+    if path == "" then return root end
+    local parts = string.split(path, ".")
+    local current = root
+    for _, part in ipairs(parts) do
+        current = current:FindFirstChild(part)
+        if not current then return nil end
+    end
+    return current
+end
+
+-- Создание луча (beam)
+local function createBeam(from, to, color1, color2, thickness, texture)
+    -- Создаем невидимую основную часть
+    local mainPart = Instance.new("Part")
+    mainPart.Name = "BulletTracer"
+    mainPart.Parent = workspace
+    mainPart.Size = Vector3.new(0, 0, 0)
+    mainPart.Massless = true
+    mainPart.Transparency = 1
+    mainPart.CanCollide = false
+    mainPart.Position = from
+    mainPart.Anchored = true
+    
+    -- Создаем две точки для луча
+    local part0 = Instance.new("Part")
+    part0.Parent = mainPart
+    part0.Size = Vector3.new(0, 0, 0)
+    part0.Massless = true
+    part0.Transparency = 1
+    part0.CanCollide = false
+    part0.Position = from
+    part0.Anchored = true
+    
+    local part1 = Instance.new("Part")
+    part1.Parent = mainPart
+    part1.Size = Vector3.new(0, 0, 0)
+    part1.Massless = true
+    part1.Transparency = 1
+    part1.CanCollide = false
+    part1.Position = to
+    part1.Anchored = true
+    
+    -- Создаем точки крепления для луча
+    local attachment0 = Instance.new("Attachment")
+    attachment0.Parent = part0
+    
+    local attachment1 = Instance.new("Attachment")
+    attachment1.Parent = part1
+    
+    -- Создаем сам луч с градиентом цвета
+    local beam = Instance.new("Beam")
+    beam.Texture = texture
+    beam.TextureMode = Enum.TextureMode.Wrap
+    beam.TextureLength = 10
+    beam.LightEmission = 1
+    beam.LightInfluence = 1
+    beam.FaceCamera = true
+    beam.ZOffset = -1
+    beam.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    beam.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, color1),
+        ColorSequenceKeypoint.new(1, color2),
+    })
+    beam.Attachment0 = attachment0
+    beam.Attachment1 = attachment1
+    beam.Width0 = thickness
+    beam.Width1 = thickness
+    beam.Enabled = true
+    beam.Parent = mainPart
+    
+    -- Уничтожаем луч через указанное время
+    task.delay(0.4, function()
+        mainPart:Destroy()
+    end)
+end
+
+-- Функция для получения оружия локального игрока
+local function getGun(player)
+    if not player or not player.Character then return nil end
+    
+    local tool = player.Character:FindFirstChildWhichIsA("Tool")
+    if not tool then return nil end
+    
+    local gunInfo = {}
+    
+    -- Ищем значение патронов в оружии
+    local descendants = tool:GetDescendants()
+    for _, obj in ipairs(descendants) do
+        if (string.lower(obj.Name):find("ammo") and not string.lower(obj.Name):find("max") and
+            (obj.ClassName == "IntValue" or obj.ClassName == "NumberValue")) then
+            gunInfo.ammo = obj
+            gunInfo.tool = tool
+            return gunInfo
+        end
+    end
+    
+    return nil
+end
+
+-- Функция для настройки отслеживания оружия
+local function setupGunTracking(player)
+    -- Очищаем текущие соединения
+    for _, connection in ipairs(gunState.connections) do
+        if connection then connection:Disconnect() end
+    end
+    gunState.connections = {}
+    
+    -- Если персонаж игрока не существует, создаем соединение на его появление
+    if not player.Character then
+        table.insert(gunState.connections, player.CharacterAdded:Connect(function(character)
+            setupGunTracking(player)
+        end))
+        return
+    end
+    
+    -- Отслеживаем добавление/удаление оружия
+    table.insert(gunState.connections, player.Character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            local gun = getGun(player)
+            if gun then
+                gunState.current_tool = gun.tool
+                gunState.previous_ammo = gun.ammo.Value
+                
+                -- Отслеживаем изменение количества патронов
+                table.insert(gunState.connections, gun.ammo.Changed:Connect(function()
+                    local new_ammo = gun.ammo.Value
+                    if new_ammo < gunState.previous_ammo then
+                        gunState.recently_shot = true
+                        task.wait() -- Короткая пауза для обнаружения пули
+                        gunState.recently_shot = false
+                    end
+                    gunState.previous_ammo = new_ammo
+                end))
+            end
+        end
+    end))
+    
+    table.insert(gunState.connections, player.Character.ChildRemoved:Connect(function(child)
+        if child == gunState.current_tool then
+            gunState.current_tool = nil
+            gunState.previous_ammo = 0
+        end
+    end))
+    
+    -- Проверяем наличие оружия сразу
+    local gun = getGun(player)
+    if gun then
+        gunState.current_tool = gun.tool
+        gunState.previous_ammo = gun.ammo.Value
+        
+        -- Отслеживаем изменение количества патронов
+        table.insert(gunState.connections, gun.ammo.Changed:Connect(function()
+            local new_ammo = gun.ammo.Value
+            if new_ammo < gunState.previous_ammo then
+                gunState.recently_shot = true
+                task.wait() -- Короткая пауза для обнаружения пули
+                gunState.recently_shot = false
+            end
+            gunState.previous_ammo = new_ammo
+        end))
+    end
+end
+
+-- Основная функция для настройки эффектов пуль
+local function setupBulletEffects()
+    local gameData = detectGame()
+    local bulletPath = getPath(workspace, gameData.BP) or workspace
+    
+    -- Настраиваем отслеживание оружия локального игрока
+    setupGunTracking(game.Players.LocalPlayer)
+    
+    -- Отслеживаем добавление персонажа, если он еще не существует
+    if not game.Players.LocalPlayer.Character then
+        game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
+            setupGunTracking(game.Players.LocalPlayer)
+        end)
+    end
+    
+    -- Удаляем старые соединения, если они существуют
+    if getgenv().bulletTracerConnection then
+        getgenv().bulletTracerConnection:Disconnect()
+        getgenv().bulletTracerConnection = nil
+    end
+    
+    -- Следим за созданием новых пуль
+    getgenv().bulletTracerConnection = bulletPath.ChildAdded:Connect(function(object)
+        if not BulletTracersConfig.Enabled then return end
+        
+        -- Проверяем, чтобы это была пуля с правильным именем
+        if object.Name == gameData.BN then
+            task.spawn(function()
+                local gunBeam = object:WaitForChild(gameData.BBN, 0.2)
+                if not gunBeam then return end
+                
+                local startPos = object.Position
+                local endPos = gunBeam.Attachment1.WorldPosition
+                
+                -- Удаляем оригинальный луч
+                gunBeam:Destroy()
+                
+                -- Создаем трейсер
+                createBeam(
+                    startPos, 
+                    endPos, 
+                    BulletTracersConfig.Color1, 
+                    BulletTracersConfig.Color2, 
+                    BulletTracersConfig.Thickness,
+                    BulletTracersConfig.Texture
+                )
+            end)
+        end
+    end)
+    
+    -- Добавляем дополнительное отслеживание для случаев, когда ChildAdded не срабатывает
+    if getgenv().bulletTracerBackupConnection then
+        getgenv().bulletTracerBackupConnection:Disconnect()
+        getgenv().bulletTracerBackupConnection = nil
+    end
+    
+    getgenv().bulletTracerBackupConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not BulletTracersConfig.Enabled then return end
+        
+        -- Проверяем все пули в рабочем пространстве
+        for _, object in ipairs(bulletPath:GetChildren()) do
+            if object.Name == gameData.BN and object:IsA("BasePart") then
+                local gunBeam = object:FindFirstChild(gameData.BBN)
+                if gunBeam and not gunBeam:GetAttribute("Processed") then
+                    gunBeam:SetAttribute("Processed", true)
+                    
+                    task.spawn(function()
+                        local startPos = object.Position
+                        local endPos = gunBeam.Attachment1.WorldPosition
+                        
+                        -- Удаляем оригинальный луч
+                        gunBeam:Destroy()
+                        
+                        -- Создаем трейсер
+                        createBeam(
+                            startPos, 
+                            endPos, 
+                            BulletTracersConfig.Color1, 
+                            BulletTracersConfig.Color2, 
+                            BulletTracersConfig.Thickness,
+                            BulletTracersConfig.Texture
+                        )
+                    end)
+                end
+            end
+        end
+    end)
+end
+
+-- Добавляем тогл Bullet Tracers с попапом
+local BulletTracersToggle = VisualsMainSection:Toggle({
+    name = "Bullet Tracers",
+    default = false,
+    flag = "visuals_bullet_tracers",
+    callback = function(value)
+        BulletTracersConfig.Enabled = value
+        
+        -- Если включаем трейсеры, настраиваем их
+        if value then
+            setupBulletEffects()
+        end
+    end
+})
+
+-- Создаем попап для настроек трейсеров
+local BulletTracersPopup = BulletTracersToggle:Popup({size = 200})
+
+-- Добавляем колорпикер для начального цвета трейсера
+BulletTracersPopup:Colorpicker({
+    name = "Start Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "bullet_tracers_color1",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            BulletTracersConfig.Color1 = color.c
+        else
+            BulletTracersConfig.Color1 = color
+        end
+    end
+})
+
+-- Добавляем колорпикер для конечного цвета трейсера
+BulletTracersPopup:Colorpicker({
+    name = "End Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "bullet_tracers_color2",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            BulletTracersConfig.Color2 = color.c
+        else
+            BulletTracersConfig.Color2 = color
+        end
+    end
+})
+
+-- Добавляем слайдер для толщины трейсера
+BulletTracersPopup:Slider({
+    name = "Thickness",
+    min = 0.1,
+    max = 5,
+    default = 1,
+    float = 0.1,
+    flag = "bullet_tracers_thickness",
+    callback = function(value)
+        BulletTracersConfig.Thickness = value
+    end
+})
+
+-- Добавляем выпадающий список для текстуры трейсера
+BulletTracersPopup:Dropdown({
+    name = "Texture",
+    values = {"Default", "Starhook", "Chain", "Lightning", "Beam", "Neon", "Laser"},
+    value = "Starhook",
+    flag = "bullet_tracers_texture",
+    callback = function(value)
+        local textures = {
+            ["Default"] = "",
+            ["Starhook"] = "rbxassetid://446111271",
+            ["Chain"] = "rbxassetid://3029306948",
+            ["Lightning"] = "rbxassetid://7216850022",
+            ["Beam"] = "rbxassetid://1263079249",
+            ["Neon"] = "rbxassetid://5864341017",
+            ["Laser"] = "rbxassetid://5864341017"
+        }
+        BulletTracersConfig.Texture = textures[value] or ""
+    end
+})
+
 -- Создаем секцию Main во вкладке Player
 PlayerMainSection = PlayerTab:Section({name = "Main", description = ">_<"})
 
