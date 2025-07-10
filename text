@@ -295,10 +295,9 @@ local function applyOtherChams()
         if player ~= LocalPlayer and player.Character then
             -- Пропускаем друзей, если включен Friend Chams
             if MaterialChamsConfig.Friend.Enabled and MaterialChamsConfig.Friend.Friends[player.Name] then
-                continue
-            end
-            
-            local character = player.Character
+                -- Пропускаем этого игрока
+            else
+                local character = player.Character
             local config = MaterialChamsConfig.Other
             
             -- Сохраняем ссылку на персонажа для обновления
@@ -321,6 +320,7 @@ local function applyOtherChams()
                 end
             end
         end
+        end
     end
 end
 
@@ -333,8 +333,8 @@ local function applyOtherHighlight()
         if player ~= LocalPlayer and player.Character then
             -- Пропускаем друзей, если включен Friend Highlight
             if HighlightChamsConfig.Friend.Enabled and MaterialChamsConfig.Friend.Friends[player.Name] then
-                continue
-            end
+                -- Пропускаем этого игрока
+            else
             
             local character = player.Character
             local config = HighlightChamsConfig.Other
@@ -375,6 +375,7 @@ local function applyOtherHighlight()
                     Highlight = highlight
                 }
             end
+        end
         end
     end
 end
@@ -3487,112 +3488,371 @@ end)
 o.ConfigSection = ConfigTab:Section({name = "Configurations", description = ">_<"})
 o.ConfigFolder = "BrandNew/Games/Universal/Configs"
 
--- Создание папки, если она не существует
-if not isfolder(o.ConfigFolder) then
-    makefolder(o.ConfigFolder)
-end
+-- Создание папок для конфигураций
+pcall(function()
+    if not isfolder("BrandNew") then
+        makefolder("BrandNew")
+    end
+    
+    if not isfolder("BrandNew/Games") then
+        makefolder("BrandNew/Games")
+    end
+    
+    if not isfolder("BrandNew/Games/Universal") then
+        makefolder("BrandNew/Games/Universal")
+    end
+    
+    if not isfolder(o.ConfigFolder) then
+        makefolder(o.ConfigFolder)
+    end
+end)
 
 -- Функция получения файлов конфигурации
 function GetConfigFiles()
-    o.common_vars.files = {}
+    local files = {}
     
-    if isfolder(o.ConfigFolder) then
-        for _, file in ipairs(listfiles(o.ConfigFolder)) do
-            if file:sub(-4) == ".cfg" then
-                o.common_vars.configName = file:match("([^/\\]+)%.cfg$")
-                table.insert(o.common_vars.files, o.common_vars.configName)
+    pcall(function()
+        if isfolder(o.ConfigFolder) then
+            local fileList = listfiles(o.ConfigFolder)
+            for _, file in ipairs(fileList) do
+                if type(file) == "string" and file:sub(-5) == ".json" then
+                    local configName = file:match("([^/\\]+)%.json$")
+                    if configName and type(configName) == "string" then
+                        table.insert(files, configName)
+                    end
+                end
             end
         end
+    end)
+    
+    -- Если нет файлов, добавляем значение по умолчанию
+    if #files == 0 then
+        table.insert(files, "default")
     end
     
-    return o.common_vars.files
+    return files
 end
 
 -- Поле ввода имени конфига
-o.ConfigName = o.ConfigSection:Textbox({name = "ConfigName", placeholder = "", flag = "config_name"})
+o.ConfigName = o.ConfigSection:Textbox({
+    name = "Config Name",
+    placeholder = "Enter config name...",
+    default = "default",
+    flag = "config_name"
+})
 
 -- Список конфигов
 o.ConfigList = o.ConfigSection:List({
-    name = "Config",
+    name = "Configs",
     values = GetConfigFiles(),
-    value = GetConfigFiles()[1] or "",
+    value = GetConfigFiles()[1] or "default",
     size = 200,
     flag = "config_list",
-    callback = function(v) if v then Library.Flags["config_name"] = v end end
-})
-
--- Кнопка сохранения
-o.ConfigSection:Button({
-    name = "SaveConfig", description = ">_<",
-    callback = function()
-        o.common_vars.configName = Library.Flags["config_name"]
-        if not o.common_vars.configName or o.common_vars.configName == "" then o.common_vars.configName = "default" end
-        
-        if not isfolder(o.ConfigFolder) then makefolder(o.ConfigFolder) end
-        o.common_vars.path = o.ConfigFolder.."/"..o.common_vars.configName..".cfg"
-        writefile(o.common_vars.path, Library:GetConfig())
-        if type(o.ConfigList.Refresh) == "function" then
-            o.ConfigList:Refresh(GetConfigFiles())
-        else
-            o.ConfigList.Refresh(GetConfigFiles())
+    callback = function(value)
+        if value and type(value) == "string" then
+            Library.Flags["config_name"] = value
+            if o.ConfigName and o.ConfigName.Set then
+                pcall(function()
+                    o.ConfigName:Set(value)
+                end)
+            end
         end
     end
 })
 
+-- Функция для обновления списка конфигов с нуля
+function RefreshConfigList()
+    local configFiles = GetConfigFiles()
+    
+    -- Создаем новый список конфигов
+    if o.ConfigList and o.ConfigList.Objects and o.ConfigList.Objects.Content then
+        -- Очищаем существующие элементы
+        for _, child in pairs(o.ConfigList.Objects.Content:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+        
+        -- Сбрасываем список элементов
+        o.ConfigList.Items = {}
+        
+        -- Добавляем новые элементы
+        for _, itemName in ipairs(configFiles) do
+            if type(itemName) == "string" then
+                o.ConfigList.Add(itemName)
+            end
+        end
+    end
+end
+
+-- Функция для безопасного сохранения конфига (без циклических ссылок)
+function SafeGetConfig()
+    -- Создаем копию флагов без циклических ссылок
+    local safeFlags = {}
+    
+    -- Обрабатываем каждый флаг отдельно
+    for flag, value in pairs(Library.Flags) do
+        -- Пропускаем функции, userdata, thread и nil
+        if type(value) == "nil" or type(value) == "function" or type(value) == "userdata" or type(value) == "thread" then
+            -- Пропускаем
+        
+        -- Обработка булевых значений (тогглы)
+        elseif type(value) == "boolean" then
+            safeFlags[flag] = value
+            
+        -- Обработка чисел
+        elseif type(value) == "number" then
+            safeFlags[flag] = value
+            
+        -- Обработка строк
+        elseif type(value) == "string" then
+            safeFlags[flag] = value
+            
+        -- Обработка таблиц (цвета, кейбинды и т.д.)
+        elseif type(value) == "table" then
+            -- Проверяем, является ли это цветом
+            if value.r and value.g and value.b then
+                safeFlags[flag] = {r = value.r, g = value.g, b = value.b}
+                if value.a then 
+                    safeFlags[flag].a = value.a 
+                end
+            
+            -- Проверяем, является ли это кейбиндом
+            elseif value.key or value.mode or value.value ~= nil then
+                local keyData = {}
+                
+                if value.key then
+                    -- Сохраняем только имя клавиши, а не объект
+                    if typeof(value.key) == "EnumItem" then
+                        keyData.key = value.key.Name
+                    else
+                        keyData.key = tostring(value.key)
+                    end
+                end
+                
+                if value.mode then
+                    keyData.mode = value.mode
+                end
+                
+                if value.value ~= nil then
+                    keyData.value = value.value
+                end
+                
+                safeFlags[flag] = keyData
+            
+            -- Проверяем, является ли это массивом строк (для списков)
+            elseif #value > 0 and type(value[1]) == "string" then
+                safeFlags[flag] = value
+                
+            -- Для других типов таблиц сохраняем только простые значения
+            else
+                local simpleTable = {}
+                for k, v in pairs(value) do
+                    if type(v) ~= "function" and type(v) ~= "userdata" and type(v) ~= "thread" and type(v) ~= "table" then
+                        simpleTable[k] = v
+                    end
+                end
+                safeFlags[flag] = simpleTable
+            end
+        end
+    end
+    
+    -- Преобразуем в JSON
+    local success, result = pcall(function()
+        return game:GetService("HttpService"):JSONEncode(safeFlags)
+    end)
+    
+    if success then
+        return result
+    else
+        -- В случае ошибки возвращаем пустой JSON
+        warn("Ошибка при сохранении конфига: " .. tostring(result))
+        return "{}"
+    end
+end
+
+-- Кнопка сохранения
+o.ConfigSection:Button({
+    name = "Save Config",
+    description = "Save current settings",
+    callback = function()
+        local configName = Library.Flags["config_name"]
+        if not configName or configName == "" or type(configName) ~= "string" then
+            configName = "default"
+        end
+        
+        if not isfolder(o.ConfigFolder) then
+            makefolder(o.ConfigFolder)
+        end
+        
+        local path = o.ConfigFolder.."/"..configName..".json"
+        local configData = SafeGetConfig()
+        
+        pcall(function()
+            writefile(path, configData)
+            print("Config saved: " .. path)
+            
+            -- Показываем уведомление
+            if Library.Notification then
+                Library.Notification({ 
+                    name = "Config Saved", 
+                    description = "Configuration '" .. configName .. "' has been saved." 
+                })
+            end
+            
+            -- Используем нашу новую функцию обновления списка
+            pcall(RefreshConfigList)
+            
+            -- Устанавливаем выбранное значение после обновления
+            task.wait(0.1) -- Небольшая задержка для обновления UI
+            if o.ConfigList and o.ConfigList.Set and type(configName) == "string" then
+                pcall(function()
+                    o.ConfigList:Set(configName)
+                end)
+            end
+        end)
+    end
+})
+
+-- Функция для безопасной загрузки конфига
+function SafeLoadConfig(jsonData)
+    local success, data = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(jsonData)
+    end)
+    
+    if not success then
+        warn("Ошибка при декодировании JSON: " .. tostring(data))
+        return false
+    end
+    
+    -- Применяем каждый флаг по отдельности
+    for flag, value in pairs(data) do
+        -- Проверяем, существует ли такой флаг
+        if Library.ConfigFlags[flag] then
+            pcall(function()
+                Library.ConfigFlags[flag](value)
+            end)
+        end
+    end
+    
+    return true
+end
+
 -- Кнопка загрузки
 o.ConfigSection:Button({
-    name = "LoadConfig", description = ">_<",
+    name = "Load Config",
+    description = "Load selected config",
     callback = function()
-        o.common_vars.configName = Library.Flags["config_list"]
-        if not o.common_vars.configName or o.common_vars.configName == "" then
+        local configName = Library.Flags["config_list"]
+        if not configName or configName == "" or type(configName) ~= "string" then
             return
         end
         
-        o.common_vars.path = o.ConfigFolder.."/"..o.common_vars.configName..".cfg"
-        if isfile(o.common_vars.path) then
-            Library.LoadConfig(readfile(o.common_vars.path))
-        else
-            if type(o.ConfigList.Refresh) == "function" then
-                o.ConfigList:Refresh(GetConfigFiles())
+        local path = o.ConfigFolder.."/"..configName..".json"
+        
+        pcall(function()
+            if isfile(path) then
+                local data = readfile(path)
+                -- Безопасная загрузка конфига
+                local success = SafeLoadConfig(data)
+                if success then
+                    print("Config loaded: " .. path)
+                end
+                
+                -- Показываем уведомление
+                if success and Library.Notification then
+                    Library.Notification({ 
+                        name = "Config Loaded", 
+                        description = "Configuration '" .. configName .. "' has been loaded." 
+                    })
+                elseif not success and Library.Notification then
+                    Library.Notification({ 
+                        name = "Error", 
+                        description = "Failed to load configuration '" .. configName .. "'" 
+                    })
+                end
             else
-                o.ConfigList.Refresh(GetConfigFiles())
+                print("Config file not found: " .. path)
+                
+                -- Показываем уведомление об ошибке
+                if Library.Notification then
+                    Library.Notification({ 
+                        name = "Error", 
+                        description = "Config file not found: " .. configName 
+                    })
+                end
+                
+                -- Используем нашу новую функцию обновления списка
+                pcall(RefreshConfigList)
             end
-        end
+        end)
     end
 })
 
 -- Кнопка удаления
 o.ConfigSection:Button({
-    name = "DeleteConfig", description = ">_<",
+    name = "Delete Config",
+    description = "Delete selected config",
     callback = function()
-        o.common_vars.configName = Library.Flags["config_list"]
-        if not o.common_vars.configName or o.common_vars.configName == "" then
+        local configName = Library.Flags["config_list"]
+        if not configName or configName == "" or type(configName) ~= "string" then
             return
         end
         
-        o.common_vars.path = o.ConfigFolder.."/"..o.common_vars.configName..".cfg"
-        if isfile(o.common_vars.path) then
-            delfile(o.common_vars.path)
-            if type(o.ConfigList.Refresh) == "function" then
-                o.ConfigList:Refresh(GetConfigFiles())
+        local path = o.ConfigFolder.."/"..configName..".json"
+        
+        pcall(function()
+            if isfile(path) then
+                delfile(path)
+                print("Config deleted: " .. path)
+                
+                -- Показываем уведомление
+                if Library.Notification then
+                    Library.Notification({ 
+                        name = "Config Deleted", 
+                        description = "Configuration '" .. configName .. "' has been deleted." 
+                    })
+                end
             else
-                o.ConfigList.Refresh(GetConfigFiles())
+                -- Показываем уведомление об ошибке
+                if Library.Notification then
+                    Library.Notification({ 
+                        name = "Error", 
+                        description = "Config file not found: " .. configName 
+                    })
+                end
             end
-        else
-            if type(o.ConfigList.Refresh) == "function" then
-                o.ConfigList:Refresh(GetConfigFiles())
-            else
-                o.ConfigList.Refresh(GetConfigFiles())
+            
+            -- Используем нашу новую функцию обновления списка
+            pcall(RefreshConfigList)
+            
+            -- Выбираем первый конфиг в списке после удаления
+            task.wait(0.1) -- Небольшая задержка для обновления UI
+            local newConfigFiles = GetConfigFiles()
+            if #newConfigFiles > 0 and o.ConfigList and o.ConfigList.Set then
+                pcall(function()
+                    o.ConfigList:Set(newConfigFiles[1])
+                end)
             end
-        end
+        end)
     end
 })
 
 -- Кнопка обновления списка
 o.ConfigSection:Button({
-    name = "RefreshList", description = ">_<",
+    name = "Refresh List",
+    description = "Update config list",
     callback = function()
-        o.ConfigList.Refresh(GetConfigFiles())
+        -- Используем нашу новую функцию обновления списка
+        pcall(RefreshConfigList)
+        
+        -- Показываем уведомление
+        if Library.Notification then
+            Library.Notification({ 
+                name = "Config List", 
+                description = "Config list has been refreshed." 
+            })
+        end
     end
 })
 
@@ -3781,12 +4041,34 @@ LegitBotTab.Set(true)
 -- Периодическое обновление списка конфигов
 spawn(function()
     while task.wait(5) do
-        if Window.Visible then
-            if type(o.ConfigList.Refresh) == "function" then
-                o.ConfigList:Refresh(GetConfigFiles())
-            else
-                o.ConfigList.Refresh(GetConfigFiles())
-            end
+        if Window and Window.Visible then
+            -- Используем нашу новую функцию обновления списка
+            pcall(function()
+                -- Сохраняем текущее выбранное значение
+                local currentSelected = Library.Flags["config_list"]
+                
+                -- Обновляем список
+                RefreshConfigList()
+                
+                -- Восстанавливаем выбранное значение, если оно существует
+                if currentSelected and type(currentSelected) == "string" and o.ConfigList and o.ConfigList.Set then
+                    -- Проверяем, существует ли такой конфиг в обновленном списке
+                    local configFiles = GetConfigFiles()
+                    local exists = false
+                    for _, name in ipairs(configFiles) do
+                        if name == currentSelected then
+                            exists = true
+                            break
+                        end
+                    end
+                    
+                    if exists then
+                        pcall(function()
+                            o.ConfigList:Set(currentSelected)
+                        end)
+                    end
+                end
+            end)
         end
     end
 end)
