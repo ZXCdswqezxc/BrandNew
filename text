@@ -60,7 +60,7 @@ PlayerMainSection:Toggle({
         if value then
             -- Создаем и запускаем Anti AFK скрипт
             o.antiAFKConnection = o.lp.Idled:Connect(function()
-                o.VirtualUser = game:GetService("VirtualUser")
+                o.VirtualUser = o.GU
                 o.VirtualUser:CaptureController()
                 o.VirtualUser:ClickButton2(Vector2.new())
             end)
@@ -751,9 +751,9 @@ end
 
 -- Обновление визуального представления персонажа
 function o.Desync:UpdateCharacter()
-    local ClonedCharacter = self.ClonedCharacter
+    o.common_vars.clonedChar = self.ClonedCharacter
 
-    if not ClonedCharacter or not ClonedCharacter.Character then
+    if not o.common_vars.clonedChar or not o.common_vars.clonedChar.Character then
         -- Если клон не существует, создаем его
         if Library.Flags["desync_vis"] then
             self:CloneCharacter()
@@ -769,7 +769,7 @@ function o.Desync:UpdateCharacter()
     o.common_vars.material = o.getMaterial(o.common_vars.materialName)
 
     -- Обновляем внешний вид всех частей
-    for _, v in pairs(ClonedCharacter.Character:GetDescendants()) do
+    for _, v in pairs(o.common_vars.clonedChar.Character:GetDescendants()) do
         if v:IsA("Part") or v:IsA("MeshPart") or v:IsA("BasePart") then
             if v.Transparency ~= 1 then
                 v.Material = o.common_vars.material
@@ -784,10 +784,10 @@ function o.Desync:UpdateCharacter()
     end
     
     -- Проверяем, что RootPart существует и обновляем его позицию
-    if ClonedCharacter.RootPart then
+    if o.common_vars.clonedChar.RootPart then
         o.common_vars.hrp = o.getHrp()
         if o.common_vars.hrp then
-            ClonedCharacter.RootPart.CFrame = o.common_vars.hrp.CFrame
+            o.common_vars.clonedChar.RootPart.CFrame = o.common_vars.hrp.CFrame
         end
     end
 end
@@ -903,9 +903,9 @@ if not _G.hookmetamethod_defined then
     if not hookmetamethod then
         hookmetamethod = function(obj, metamethod, hook)
             -- Заглушка для hookmetamethod
-            local original = obj[metamethod]
+            o.common_vars.original = obj[metamethod]
             obj[metamethod] = hook
-            return original
+            return o.common_vars.original
         end
     end
     
@@ -2079,7 +2079,7 @@ function CreateWatermark(enabled)
     o.watermarkText.Position = UDim2.new(0.0333333351, 0, 0.11, 0)
     o.watermarkText.Size = UDim2.new(0, 280, 1, 0)
     o.watermarkText.Font = Enum.Font.Sarpanch
-    o.watermarkText.Text = "BrandNew | skidded | " .. o.lp.Name .. " | " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+    o.watermarkText.Text = "BrandNew | skidded | " .. o.lp.Name .. " | " .. o.MS:GetProductInfo(game.PlaceId).Name
     o.watermarkText.TextColor3 = Color3.fromRGB(255, 255, 255)
     o.watermarkText.TextSize = 12
     o.watermarkText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -2103,15 +2103,14 @@ function CreateWatermark(enabled)
     
     -- Функция для обновления размера WaterMark в зависимости от текста
     function updateWatermarkSize()
-        local textSize = o.watermarkText.TextBounds.X
-        local newWidth = textSize + 40
+        o.common_vars.textSize = o.watermarkText.TextBounds.X
+        o.common_vars.newWidth = o.common_vars.textSize + 40
         
-        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        local tween = o.ts:Create(o.watermarkFrame, tweenInfo, {Size = UDim2.new(0, newWidth, 0, 25)})
-        tween:Play()
+        o.ts:Create(o.watermarkFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), 
+            {Size = UDim2.new(0, o.common_vars.newWidth, 0, 25)}):Play()
         
-        local strokeTween = o.ts:Create(o.watermarkTopStroke, tweenInfo, {Size = UDim2.new(0, newWidth, 0, 1)})
-        strokeTween:Play()
+        o.ts:Create(o.watermarkTopStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), 
+            {Size = UDim2.new(0, o.common_vars.newWidth, 0, 1)}):Play()
     end
     
     o.watermarkText:GetPropertyChangedSignal("Text"):Connect(updateWatermarkSize)
@@ -2119,12 +2118,12 @@ function CreateWatermark(enabled)
     
     -- Функция для обновления позиции при перетаскивании
     function o.updateDrag(input)
-        local delta = input.Position - o.drag.dragStart
-        local newPosition = UDim2.new(o.drag.startPos.X.Scale, o.drag.startPos.X.Offset + delta.X, o.drag.startPos.Y.Scale, o.drag.startPos.Y.Offset + delta.Y)
+        o.common_vars.delta = input.Position - o.drag.dragStart
+        o.common_vars.newPosition = UDim2.new(o.drag.startPos.X.Scale, o.drag.startPos.X.Offset + o.common_vars.delta.X, 
+            o.drag.startPos.Y.Scale, o.drag.startPos.Y.Offset + o.common_vars.delta.Y)
         
-        local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        local tween = o.ts:Create(o.watermarkFrame, tweenInfo, {Position = newPosition})
-        tween:Play()
+        o.ts:Create(o.watermarkFrame, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), 
+            {Position = o.common_vars.newPosition}):Play()
     end
     
     o.watermarkFrame.InputBegan:Connect(function(input)
@@ -2476,10 +2475,10 @@ o.autoBuy.buyItem = function(itemName)
                         fireclickdetector(o.common_vars.clickdetector)
                         task.wait(1)
                         
-                        local success = o.autoBuy.hasItem(itemName)
+                        o.common_vars.success = o.autoBuy.hasItem(itemName)
                         
                         -- Если оружие куплено успешно, сбрасываем счетчик попыток покупки патронов
-                        if success then
+                        if o.common_vars.success then
                             o.autoBuy.lastGunBought = true
                             o.autoBuy.ammoAttempts = 0
                             
@@ -2492,7 +2491,7 @@ o.autoBuy.buyItem = function(itemName)
                             end
                         end
                         
-                        return success
+                        return o.common_vars.success
                     end
                 end
                 break
@@ -2537,8 +2536,8 @@ o.autoBuy.connection = o.rs.Heartbeat:Connect(function()
         end
         
         -- Покупаем текущий отсутствующий предмет
-        local item = o.common_vars.missingItems[o.autoBuy.currentItemIndex]
-        local success = o.autoBuy.buyItem(item)
+        o.common_vars.item = o.common_vars.missingItems[o.autoBuy.currentItemIndex]
+        o.common_vars.success = o.autoBuy.buyItem(o.common_vars.item)
         
         -- Возвращаемся на исходную позицию
         o.autoBuy.returnToOriginalPosition()
@@ -2597,7 +2596,7 @@ o.autoBuy.returnToOriginalPosition = function()
 end
 
 -- UI Toggle for AutoBuy with multi-select
-local AutoBuyToggle = MiscUtilsSection:Toggle({
+o.AutoBuyToggle = MiscUtilsSection:Toggle({
     name = "AutoBuy",
     default = false,
     flag = "misc_autobuy",
@@ -2607,10 +2606,10 @@ local AutoBuyToggle = MiscUtilsSection:Toggle({
 })
 
 -- Создаем попап для AutoBuy
-local AutoBuyPopup = AutoBuyToggle:Popup({size = 250})
+o.AutoBuyPopup = o.AutoBuyToggle:Popup({size = 250})
 
 -- Добавляем выпадающий список для выбора оружия в попап AutoBuy
-AutoBuyPopup:Dropdown({
+o.AutoBuyPopup:Dropdown({
     name = "Items",
     values = o.autoBuy.itemsList,
     multi = true,
@@ -2624,7 +2623,7 @@ AutoBuyPopup:Dropdown({
 -- Добавлять ammo только если не 71189885129233
 if game.PlaceId ~= 71189885129233 then
     -- Добавляем тогл для включения/выключения автопокупки патронов
-    AutoBuyPopup:Toggle({
+    o.AutoBuyPopup:Toggle({
         name = "Auto Buy Ammo",
         default = false,
         flag = "autobuy_ammo",
@@ -2634,7 +2633,7 @@ if game.PlaceId ~= 71189885129233 then
     })
 
     -- Добавляем выпадающий список для выбора типов патронов
-    AutoBuyPopup:Dropdown({
+    o.AutoBuyPopup:Dropdown({
         name = "Ammo Types",
         values = o.autoBuy.ammoList,
         multi = true,
@@ -2684,7 +2683,7 @@ o.multiGuns.equipSelectedGuns = function()
                 
                 -- Пытаемся перезарядить оружие
                 pcall(function()
-                    game:GetService("ReplicatedStorage").MainEvent:FireServer("Reload", tool)
+                    o.RP.MainEvent:FireServer("Reload", tool)
                 end)
                 
                 break
@@ -2795,10 +2794,10 @@ ExtraSection:Toggle({
             -- Сохраняем оригинальный хук, если он еще не сохранен
             if not o.originalRecoilHook then
                 o.originalRecoilHook = hookmetamethod(game, "__newindex", function(self, index, value)
-                    local callingScr = getcallingscript()
+                    o.common_vars.callingScr = getcallingscript()
                     
                     -- Функция проверки Framework
-                    local function isframework(scriptInstance)
+                    function o.common_vars.isframework(scriptInstance)
                         if tostring(scriptInstance) == "Framework" then
                             return true
                         end
@@ -2806,7 +2805,7 @@ ExtraSection:Toggle({
                     end
                     
                     -- Функция проверки аргументов
-                    local function checkArgs(instance, idx)
+                    function o.common_vars.checkArgs(instance, idx)
                         if tostring(instance):lower():find("camera") and tostring(idx) == "CFrame" then
                             return true
                         end
@@ -2814,7 +2813,7 @@ ExtraSection:Toggle({
                     end
                     
                     -- Если включен No Recoil и вызов от Framework для изменения CFrame камеры, блокируем
-                    if Library.Flags["misc_norecoil"] and isframework(callingScr) and checkArgs(self, index) then
+                    if Library.Flags["misc_norecoil"] and o.common_vars.isframework(o.common_vars.callingScr) and o.common_vars.checkArgs(self, index) then
                         return
                     end
                     
@@ -2898,10 +2897,7 @@ o.FovChangerToggle = ExtraSection:Toggle({
 })
 
 -- Создаем попап для FOV Changer
-o.FovChangerPopup = o.FovChangerToggle:Popup({size = 150})
-
--- Добавляем слайдер для значения FOV
-o.FovChangerPopup:Slider({
+o.FovChangerToggle:Popup({size = 150}):Slider({
     name = "FOV Value",
     min = 70,
     max = 120,
