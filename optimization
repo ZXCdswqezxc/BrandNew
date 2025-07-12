@@ -56,6 +56,15 @@ local o = {
     mouse = game:GetService("Players").LocalPlayer:GetMouse(),
     camera = game:GetService("Workspace").CurrentCamera,
     
+    -- Часто используемые сокращения для частей персонажа
+    parts = {
+        HRP = "HumanoidRootPart",
+        HUM = "Humanoid",
+        HEAD = "Head",
+        TORSO = "UpperTorso",
+        LTORSO = "LowerTorso"
+    },
+    
     -- R15 Body Parts
     r15 = {
         root = "HumanoidRootPart",
@@ -223,6 +232,9 @@ local o = {
         hrp = nil,
         hum = nil,
         head = nil,
+        rootPart = nil,
+        humanoid = nil,
+        character = nil,
         
         -- UI elements
         status = nil,
@@ -236,10 +248,14 @@ local o = {
         camCF = nil,
         move = nil,
         newPos = nil,
+        curVel = nil,
+        speedMult = nil,
+        newVel = nil,
         
         -- Flags and states
         hasBillboard = false,
         mode = nil,
+        isActive = nil,
         
         -- File operations
         configName = nil,
@@ -248,20 +264,45 @@ local o = {
         
         -- Connections
         tempConn = nil,
+        conn = nil,
         
         -- Desync variables
         shouldShowClone = nil,
         materialName = nil,
         material = nil,
         color = nil,
-        isActive = nil,
         previousStatus = nil,
         isDesyncActive = nil,
         relativeOffset = nil,
         desyncFactor = nil,
         
         -- Visualization
-        originalPart = nil
+        originalPart = nil,
+        
+        -- Часто используемые переменные для трейсеров
+        startPos = nil,
+        endPos = nil,
+        gunBeam = nil,
+        
+        -- Часто используемые переменные для конфигов
+        config = nil,
+        highlight = nil,
+        
+        -- Часто используемые переменные для игроков
+        player = nil,
+        playerName = nil,
+        
+        -- Часто используемые переменные для обработки данных
+        success = nil,
+        result = nil,
+        data = nil,
+        
+        -- Часто используемые переменные для UI
+        textures = nil,
+        
+        -- Часто используемые переменные для частей тела
+        part = nil,
+        handle = nil
     }
 }
 
