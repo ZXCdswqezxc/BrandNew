@@ -1,3 +1,4 @@
+
 -- BrandNew UI Script
 
 --[[
@@ -17,7 +18,7 @@ OptURL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main
 o = loadstring(game:HttpGet(OptURL))() or {}
 
 -- Загрузка UI библиотеки
-URL = "https://raw.githubusercontent.com/ZXCdswqezxc/img/refs/heads/main/ad
+URL = "https://raw.githubusercontent.com/ZXCdswqezxc/img/refs/heads/main/ad"
 Library = loadstring(game:HttpGet(URL))()
 
 -- Примечание: Игнорируйте ошибки линтера, связанные с функциями API эксплойта, такими как:
@@ -48,8 +49,393 @@ MiscTab = Window:Tab({name = "Misc", icon = "rbxassetid://6031094678"})
 PlayerTab = Window:Tab({name = "Player", icon = "rbxassetid://6031068427"})
 ConfigTab = Window:Tab({name = "Config", icon = "rbxassetid://6031280882"})
 
+-- Ensure global CrosshairSettings table exists before UI references it
+_G.CrosshairSettings = _G.CrosshairSettings or {
+    Enabled = false,
+    Color = Color3.fromRGB(255, 255, 255),
+    Transparency = 1,
+    AlwaysRotating = false,
+    Speed = 12,
+    GapSize = 12,
+    Length = 12,
+    Thickness = 1.5,
+    Sides = 4,
+    SizingEasingStyle = "Off",
+    SpeedEasingStyle = "Off",
+    ShowText = false,
+    Pulse = false,
+    AttachToTarget = false
+}
+-- Local reference for convenience; this points to the same table
+CrosshairSettings = _G.CrosshairSettings
+
+---------------------------------------------------------------------
+-- Crosshair Library -------------------------------------------------
+---------------------------------------------------------------------
+local CrosshairLib = (function()
+    local lib = {}
+
+    -- Settings (exported)
+    lib.Settings = {
+        Enabled = false,
+        Color = Color3.fromRGB(255, 255, 255),
+        Transparency = 1,
+        AlwaysRotating = false,
+        Speed = 12,
+        GapSize = 12,
+        Length = 12,
+        Thickness = 1.5,
+        Sides = 4,
+        SizingEasingStyle = "Off",
+        SpeedEasingStyle = "Off",
+        ShowText = false,
+        Pulse = false,
+        AttachToTarget = false
+    }
+
+    -------------------------------------------------
+    -- Internal state
+    -------------------------------------------------
+    local RunService = game:GetService("RunService")
+    local Players = game:GetService("Players")
+    local Workspace = game:GetService("Workspace")
+    local UserInputService = game:GetService("UserInputService")
+
+    local LocalPlayer = Players.LocalPlayer
+    local Mouse = LocalPlayer and LocalPlayer:GetMouse()
+    local Camera = Workspace.CurrentCamera or Workspace:WaitForChild("Camera")
+    local Offset = game:GetService("GuiService"):GetGuiInset().Y
+
+    local crosshair_Lines, crosshair_Outlines = {}, {}
+    local crosshair_SpinAngle = 0
+    local crosshair_lineOffsets = {}
+    local CursorSize = 0
+    local Sine = 1
+
+    local utility = {}
+    local Tween = {EasingStyles = {}}
+
+    -------------------------------------------------
+    -- Utility functions
+    -------------------------------------------------
+    function utility:drawObject(type, props)
+        local obj = Drawing.new(type)
+        for k, v in pairs(props) do
+            obj[k] = v
+        end
+        return obj
+    end
+
+    function utility:generateAngles(sides)
+        local angles = {}
+        for i = 1, sides do
+            angles[i] = (i - 1) * (2 * math.pi / sides)
+        end
+        return angles
+    end
+
+    function utility:Shift(n)
+        return n % (2 * math.pi) / (2 * math.pi)
+    end
+
+    -- Minimal easing styles (same as sample)
+    Tween.EasingStyles = {
+        Linear = {InOut = function(t) return t end},
+        Cubic = {InOut = function(t) return t * t * t end},
+        Quad = {InOut = function(t) return t * t end},
+        Quart = {InOut = function(t) return t * t * t * t end},
+        Quint = {InOut = function(t) return t * t * t * t * t end},
+        Sine = {InOut = function(t) return 1 - math.cos((t * math.pi)/2) end},
+        Exponential = {InOut = function(t) return t==0 and 0 or 2 ^ (10*(t-1)) end},
+        Back = {InOut = function(t) local s=1.70158; return t*t*((s+1)*t-s) end},
+        Bounce = {InOut = function(t) if t<0.5 then t=1-t*2; return (1-(1-t)*(1-t))/2 else t=t*2-1; return (1+t*t)/2 end end},
+        Elastic = {InOut = function(t) return t==0 and 0 or t==1 and 1 or -2 ^ (10*(t-1))*math.sin((t-1.075)*(2*math.pi)/0.3)/2+0.5 end},
+        Circular = {InOut = function(t) return 1-math.sqrt(1-t*t) end}
+    }
+    -- Ensure each style has entries for Enum.EasingDirection.In/Out/InOut
+    for _, dirTable in pairs(Tween.EasingStyles) do
+        local f = dirTable.InOut
+        dirTable[Enum.EasingDirection.In] = dirTable[Enum.EasingDirection.In] or f
+        dirTable[Enum.EasingDirection.Out] = dirTable[Enum.EasingDirection.Out] or f
+        dirTable[Enum.EasingDirection.InOut] = dirTable[Enum.EasingDirection.InOut] or f
+    end
+
+    -------------------------------------------------
+    -- Core logic
+    -------------------------------------------------
+    local function initialise()
+        crosshair_lineOffsets = utility:generateAngles(lib.Settings.Sides)
+        for i = 1, #crosshair_Lines do
+            crosshair_Lines[i]:Remove()
+            crosshair_Outlines[i]:Remove()
+        end
+        crosshair_Lines, crosshair_Outlines = {}, {}
+        for i = 1, lib.Settings.Sides do
+            crosshair_Lines[i] = utility:drawObject("Line",{Visible=false,Color=lib.Settings.Color,Thickness=lib.Settings.Thickness,ZIndex=2,Transparency=lib.Settings.Transparency})
+            crosshair_Outlines[i] = utility:drawObject("Line",{Visible=false,Color=Color3.new(),Thickness=lib.Settings.Thickness*2.5,ZIndex=1,Transparency=lib.Settings.Transparency})
+        end
+    end
+
+    -- Text
+    local sub = utility:drawObject("Text",{Visible=false,Text="Brandnew",Size=13,Center=false,Outline=true,Font=Drawing.Fonts.Plex,Color=Color3.new(1,1,1)})
+    local domain = utility:drawObject("Text",{Visible=false,Text=".skidded",Size=13,Center=false,Outline=true,Font=Drawing.Fonts.Plex,Color=Color3.new(1,1,1)})
+
+    local function onRenderStep(Fps)
+        if not lib.Settings.Enabled then
+            for i = 1, #crosshair_Lines do
+                crosshair_Lines[i].Visible = false
+                crosshair_Outlines[i].Visible = false
+            end
+            sub.Visible, domain.Visible = false, false
+            return
+        end
+
+        if lib.Settings.AlwaysRotating then
+            crosshair_SpinAngle += math.rad((lib.Settings.Speed*10)*Fps)
+        else
+            crosshair_SpinAngle = 0
+        end
+
+        local Radius = lib.Settings.Length*5
+        local Gap = lib.Settings.GapSize
+        local origin = Vector2.new(Mouse.X, Mouse.Y + Offset)
+
+        if lib.Settings.AttachToTarget and utility.target and utility.target.Character then
+            local pos,onScreen = Camera:WorldToViewportPoint(utility.target.Character.HumanoidRootPart.Position)
+            if onScreen then origin = Vector2.new(pos.X,pos.Y) end
+        end
+
+        CursorSize += 0.025
+        local SmoothAngle = lib.Settings.SpeedEasingStyle~="Off" and Tween.EasingStyles[lib.Settings.SpeedEasingStyle][Enum.EasingDirection.InOut](utility:Shift(crosshair_SpinAngle))*(math.pi*math.pi/2) or crosshair_SpinAngle
+        local Dynamic = math.cos(CursorSize)
+        local SmoothSize = lib.Settings.SizingEasingStyle~="Off" and ((Radius/2)*Tween.EasingStyles[lib.Settings.SizingEasingStyle][Enum.EasingDirection.In](utility:Shift(Dynamic))) or 0
+        local localRadius = Radius - SmoothSize
+
+        for i = 1, #crosshair_Lines do
+            local dir = Vector2.new(math.cos(SmoothAngle+crosshair_lineOffsets[i]), math.sin(SmoothAngle+crosshair_lineOffsets[i]))
+            crosshair_Lines[i].From = origin + dir*Gap
+            crosshair_Lines[i].To = crosshair_Lines[i].From + dir*localRadius
+            crosshair_Outlines[i].From = origin + dir*(Gap-1)
+            crosshair_Outlines[i].To = crosshair_Lines[i].From + dir*(localRadius+1)
+            crosshair_Lines[i].Visible, crosshair_Outlines[i].Visible = true, true
+            crosshair_Lines[i].Color = lib.Settings.Color
+            crosshair_Lines[i].Transparency = lib.Settings.Transparency
+            crosshair_Lines[i].Thickness = lib.Settings.Thickness
+            crosshair_Outlines[i].Thickness = lib.Settings.Thickness*2.5
+        end
+
+        if lib.Settings.ShowText then
+            local yOffset = lib.Settings.Length*5 + lib.Settings.GapSize
+            -- Center text horizontally under the crosshair
+            local totalWidth = sub.TextBounds.X + domain.TextBounds.X
+            local textOrigin = Vector2.new(origin.X - totalWidth/2, origin.Y + yOffset)
+            sub.Visible, domain.Visible = true, true
+            sub.Position = textOrigin
+            domain.Position = textOrigin + Vector2.new(sub.TextBounds.X, 0)
+            if lib.Settings.Pulse then
+                Sine = math.abs(math.sin(tick()*4))
+                sub.Transparency, domain.Transparency = Sine, Sine
+            else
+                sub.Transparency, domain.Transparency = 1,1
+            end
+        else
+            sub.Visible, domain.Visible = false, false
+        end
+    end
+
+    -------------------------------------------------
+    -- Public API
+    -------------------------------------------------
+    local rsConn = nil
+
+    function lib.update()
+        initialise()
+    end
+
+    function lib.setEnabled(state)
+        lib.Settings.Enabled = state
+        if state and not rsConn then
+            rsConn = RunService.RenderStepped:Connect(onRenderStep)
+        end
+    end
+
+    -- initial setup
+    initialise()
+
+    return lib
+end)()
+
+-- Expose settings for UI code compatibility
+_G.CrosshairSettings = CrosshairLib.Settings
+-- Refresh local alias so UI references the same table
+CrosshairSettings = _G.CrosshairSettings
+function updateCrosshair() CrosshairLib.update() end
+
 -- Создаем секцию Main во вкладке Visuals
 VisualsMainSection = VisualsTab:Section({name = "Main", description = ">_<", side = "right"})
+
+-- Crosshair UI (использует глобальную CrosshairSettings, не объявляем её заново!)
+local CrosshairToggle = VisualsMainSection:Toggle({
+    name = "Crosshair",
+    default = CrosshairSettings.Enabled,
+    flag = "visual_crosshair",
+    callback = function(val)
+        CrosshairLib.setEnabled(val)
+        updateCrosshair()
+    end
+})
+
+local CrosshairPopup = CrosshairToggle:Popup({Size = 220})
+
+CrosshairPopup:Colorpicker({
+    Name = "Color",
+    Value = CrosshairSettings.Color,
+    Flag = "crosshair_color",
+    Callback = function(val)
+        if type(val) == "table" and val.c then
+            CrosshairSettings.Color = val.c
+        else
+            CrosshairSettings.Color = val
+        end
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Slider({
+    Name = "Transparency",
+    Min = 0,
+    Max = 1,
+    Float = 0.01,
+    Value = CrosshairSettings.Transparency,
+    Flag = "crosshair_transparency",
+    Callback = function(val)
+        CrosshairSettings.Transparency = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Slider({
+    Name = "Sides",
+    Min = 2,
+    Max = 12,
+    Value = CrosshairSettings.Sides,
+    Flag = "crosshair_sides",
+    Callback = function(val)
+        CrosshairSettings.Sides = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Slider({
+    Name = "Length",
+    Min = 1,
+    Max = 50,
+    Value = CrosshairSettings.Length,
+    Flag = "crosshair_length",
+    Callback = function(val)
+        CrosshairSettings.Length = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Slider({
+    Name = "Gap Size",
+    Min = 1,
+    Max = 50,
+    Value = CrosshairSettings.GapSize,
+    Flag = "crosshair_gap",
+    Callback = function(val)
+        CrosshairSettings.GapSize = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Slider({
+    Name = "Thickness",
+    Min = 0.5,
+    Max = 10,
+    Float = 0.1,
+    Value = CrosshairSettings.Thickness,
+    Flag = "crosshair_thickness",
+    Callback = function(val)
+        CrosshairSettings.Thickness = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Toggle({
+    Name = "Rotate",
+    Flag = "crosshair_rotating",
+    Default = CrosshairSettings.AlwaysRotating,
+    Callback = function(val)
+        CrosshairSettings.AlwaysRotating = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Slider({
+    Name = "Speed",
+    Min = 1,
+    Max = 50,
+    Value = CrosshairSettings.Speed,
+    Flag = "crosshair_speed",
+    Callback = function(val)
+        CrosshairSettings.Speed = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Dropdown({
+    Name = "Size Animation",
+    Values = {"Off", "Linear", "Cubic", "Quad", "Quart", "Quint", "Sine", "Exponential", "Back", "Bounce", "Elastic", "Circular"},
+    Value = CrosshairSettings.SizingEasingStyle,
+    Flag = "crosshair_sizing_easing",
+    Callback = function(val)
+        CrosshairSettings.SizingEasingStyle = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Dropdown({
+    Name = "Speed Animation",
+    Values = {"Off", "Linear", "Cubic", "Quad", "Quart", "Quint", "Sine", "Exponential", "Back", "Bounce", "Elastic", "Circular"},
+    Value = CrosshairSettings.SpeedEasingStyle,
+    Flag = "crosshair_speed_easing",
+    Callback = function(val)
+        CrosshairSettings.SpeedEasingStyle = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Toggle({
+    Name = "Show Text",
+    Flag = "crosshair_show_text",
+    Default = CrosshairSettings.ShowText,
+    Callback = function(val)
+        CrosshairSettings.ShowText = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Toggle({
+    Name = "Pulse",
+    Flag = "crosshair_pulse",
+    Default = CrosshairSettings.Pulse,
+    Callback = function(val)
+        CrosshairSettings.Pulse = val
+        updateCrosshair()
+    end
+})
+
+CrosshairPopup:Toggle({
+    Name = "Attach To Target",
+    Flag = "crosshair_attach_target",
+    Default = CrosshairSettings.AttachToTarget,
+    Callback = function(val)
+        CrosshairSettings.AttachToTarget = val
+        updateCrosshair()
+    end
+})
 
 -- Конфигурация трейсеров
 BulletTracersConfig = {
@@ -6294,7 +6680,7 @@ o.antiInertiaConnection = o.rs.Heartbeat:Connect(function()
         pcall(function()
             if o.common_vars.hrp and o.common_vars.hrp:IsDescendantOf(game) then
                 o.common_vars.hrp.Velocity = o.funcs.v3(0, o.common_vars.hrp.Velocity.Y, 0)
-            end
-        end)
+    end
+end)
     end
 end)
