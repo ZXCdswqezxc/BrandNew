@@ -274,6 +274,142 @@ function updateCrosshair() CrosshairLib.update() end
 -- Создаем секцию Main во вкладке Visuals
 VisualsMainSection = VisualsTab:Section({name = "Main", description = ">_<", side = "right"})
 
+-- Создаем секцию China Hat во вкладке Visuals (левая сторона)
+VisualsChinaHatSection = VisualsTab:Section({name = "Extra", description = ">_<", side = "left"})
+
+--[[
+    Cone Hat System
+    Извлечено из Sanky Box
+    Автор: Memelouse#3150
+]]
+
+local runservice = game:GetService("RunService")
+local lplr = game:GetService("Players").LocalPlayer
+local camera = workspace.CurrentCamera
+local tau = math.pi * 2
+
+-- Настройки по умолчанию
+local ConeHatSettings = {
+    enabled = false,
+    minCameraDistance = 1,
+    hatTransparency = 0.35,
+    circleTransparency = 1,
+    height = 0.75,
+    radius = 1,
+    sides = 25,
+    rainbow = false,
+    color = Color3.fromRGB(128, 18, 255),
+    offset = Vector3.new(0, 0.75, 0)
+}
+
+-- Создание рисунков
+local coneDrawings = {}
+for i = 1, ConeHatSettings.sides do
+    coneDrawings[i] = {Drawing.new("Line"), Drawing.new("Triangle")}
+    coneDrawings[i][1].ZIndex = 2
+    coneDrawings[i][1].Thickness = 2
+    coneDrawings[i][2].ZIndex = 1
+    coneDrawings[i][2].Filled = true
+end
+
+-- Основной цикл рендеринга
+local coneRenderConnection = runservice.RenderStepped:Connect(function()
+    local pass = ConeHatSettings.enabled and 
+                 lplr.Character and 
+                 lplr.Character:FindFirstChild("Head") ~= nil and
+                 (camera.CFrame.p - camera.Focus.p).magnitude > ConeHatSettings.minCameraDistance and
+                 lplr.Character.Humanoid.Health > 0
+    
+    for i = 1, #coneDrawings do
+        local line, triangle = coneDrawings[i][1], coneDrawings[i][2]
+        if pass then
+            local color = ConeHatSettings.rainbow and 
+                         Color3.fromHSV((tick() % 5 / 5 - (i / #coneDrawings)) % 1, 0.5, 1) or 
+                         ConeHatSettings.color
+            
+            local pos = lplr.Character.Head.Position + ConeHatSettings.offset
+            local topWorld = pos + Vector3.new(0, ConeHatSettings.height, 0)
+            
+            local last, next = (i / ConeHatSettings.sides) * tau, ((i + 1) / ConeHatSettings.sides) * tau
+            local lastWorld = pos + (Vector3.new(math.cos(last), 0, math.sin(last)) * ConeHatSettings.radius)
+            local nextWorld = pos + (Vector3.new(math.cos(next), 0, math.sin(next)) * ConeHatSettings.radius)
+            
+            local lastScreen = camera:WorldToViewportPoint(lastWorld)
+            local nextScreen = camera:WorldToViewportPoint(nextWorld)
+            local topScreen = camera:WorldToViewportPoint(topWorld)
+            
+            line.From = Vector2.new(lastScreen.X, lastScreen.Y)
+            line.To = Vector2.new(nextScreen.X, nextScreen.Y)
+            line.Color = color
+            line.Transparency = ConeHatSettings.circleTransparency
+            line.Visible = true
+            
+            triangle.PointA = Vector2.new(topScreen.X, topScreen.Y)
+            triangle.PointB = line.From
+            triangle.PointC = line.To
+            triangle.Color = color
+            triangle.Transparency = ConeHatSettings.hatTransparency
+            triangle.Visible = true
+        else
+            line.Visible = false
+            triangle.Visible = false
+        end
+    end
+end)
+
+-- Функции для управления
+local ConeHat = {}
+
+function ConeHat:Enable(enabled)
+    ConeHatSettings.enabled = enabled
+end
+
+function ConeHat:SetColor(color)
+    ConeHatSettings.color = color
+end
+
+function ConeHat:SetRainbow(enabled)
+    ConeHatSettings.rainbow = enabled
+end
+
+function ConeHat:SetHeight(height)
+    ConeHatSettings.height = height
+end
+
+function ConeHat:SetRadius(radius)
+    ConeHatSettings.radius = radius
+end
+
+function ConeHat:SetSides(sides)
+    ConeHatSettings.sides = sides
+    -- Пересоздаем рисунки с новым количеством сторон
+    for i = 1, #coneDrawings do
+        coneDrawings[i][1]:Remove()
+        coneDrawings[i][2]:Remove()
+    end
+    coneDrawings = {}
+    for i = 1, ConeHatSettings.sides do
+        coneDrawings[i] = {Drawing.new("Line"), Drawing.new("Triangle")}
+        coneDrawings[i][1].ZIndex = 2
+        coneDrawings[i][1].Thickness = 2
+        coneDrawings[i][2].ZIndex = 1
+        coneDrawings[i][2].Filled = true
+    end
+end
+
+function ConeHat:SetTransparency(hatTransparency, circleTransparency)
+    ConeHatSettings.hatTransparency = hatTransparency or ConeHatSettings.hatTransparency
+    ConeHatSettings.circleTransparency = circleTransparency or ConeHatSettings.circleTransparency
+end
+
+function ConeHat:SetOffset(offset)
+    ConeHatSettings.offset = offset
+end
+
+function ConeHat:SetMinCameraDistance(distance)
+    ConeHatSettings.minCameraDistance = distance
+end
+
 -- Конфигурация Map Material
 MapMaterialConfig = {
     Enabled = false,
@@ -622,6 +758,305 @@ CrosshairPopup:Toggle({
     Callback = function(val)
         CrosshairSettings.AttachToTarget = val
         updateCrosshair()
+    end
+})
+
+-- China Hat UI
+local ChinaHatToggle = VisualsChinaHatSection:Toggle({
+    name = "China Hat",
+    default = ConeHatSettings.enabled,
+    flag = "visual_china_hat",
+    callback = function(val)
+        ConeHat:Enable(val)
+    end
+})
+
+local ChinaHatPopup = ChinaHatToggle:Popup({size = 250})
+
+ChinaHatPopup:Colorpicker({
+    Name = "Color",
+    Value = ConeHatSettings.color,
+    Flag = "china_hat_color",
+    Callback = function(val)
+        if type(val) == "table" and val.c then
+            ConeHat:SetColor(val.c)
+        else
+            ConeHat:SetColor(val)
+        end
+    end
+})
+
+ChinaHatPopup:Toggle({
+    Name = "Rainbow",
+    Flag = "china_hat_rainbow",
+    Default = ConeHatSettings.rainbow,
+    Callback = function(val)
+        ConeHat:SetRainbow(val)
+    end
+})
+
+ChinaHatPopup:Slider({
+    Name = "Height",
+    Min = 0.1,
+    Max = 3,
+    Float = 0.1,
+    Value = ConeHatSettings.height,
+    Flag = "china_hat_height",
+    Callback = function(val)
+        ConeHat:SetHeight(val)
+    end
+})
+
+ChinaHatPopup:Slider({
+    Name = "Radius",
+    Min = 0.1,
+    Max = 3,
+    Float = 0.1,
+    Value = ConeHatSettings.radius,
+    Flag = "china_hat_radius",
+    Callback = function(val)
+        ConeHat:SetRadius(val)
+    end
+})
+
+ChinaHatPopup:Slider({
+    Name = "Sides",
+    Min = 3,
+    Max = 50,
+    Value = ConeHatSettings.sides,
+    Flag = "china_hat_sides",
+    Callback = function(val)
+        ConeHat:SetSides(val)
+    end
+})
+
+ChinaHatPopup:Slider({
+    Name = "Hat Transparency",
+    Min = 0,
+    Max = 1,
+    Float = 0.01,
+    Value = ConeHatSettings.hatTransparency,
+    Flag = "china_hat_transparency",
+    Callback = function(val)
+        ConeHat:SetTransparency(val, ConeHatSettings.circleTransparency)
+    end
+})
+
+ChinaHatPopup:Slider({
+    Name = "Circle Transparency",
+    Min = 0,
+    Max = 1,
+    Float = 0.01,
+    Value = ConeHatSettings.circleTransparency,
+    Flag = "china_hat_circle_transparency",
+    Callback = function(val)
+        ConeHat:SetTransparency(ConeHatSettings.hatTransparency, val)
+    end
+})
+
+--[[
+    Custom Skyboxes System
+    Извлечено из Sanky Box
+    Автор: Memelouse#3150
+]]
+
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+
+-- Глобальные переменные
+getgenv().skybox = false
+getgenv().theskybox = "Default"
+
+-- Доступные skyboxes
+local skyboxes = {
+    "Pink sky",
+    "Nebula", 
+    "Red sky",
+    "Purple sky",
+    "Green sky",
+    "Meffsol sky",
+    "Space",
+    "Dark Night",
+    "hd",
+    "spongebob"
+}
+
+-- ID текстур для каждого skybox
+local skyboxTextures = {
+    ["Pink sky"] = {
+        SkyboxBk = "http://www.roblox.com/asset/?id=1279987105",
+        SkyboxDn = "http://www.roblox.com/asset/?id=1279987105",
+        SkyboxFt = "http://www.roblox.com/asset/?id=1279987105",
+        SkyboxLf = "http://www.roblox.com/asset/?id=1279987105",
+        SkyboxRt = "http://www.roblox.com/asset/?id=1279987105",
+        SkyboxUp = "http://www.roblox.com/asset/?id=1279987105"
+    },
+    ["Red sky"] = {
+        SkyboxBk = "http://www.roblox.com/asset/?id=2571711090",
+        SkyboxDn = "http://www.roblox.com/asset/?id=2571711090",
+        SkyboxFt = "http://www.roblox.com/asset/?id=2571711090",
+        SkyboxLf = "http://www.roblox.com/asset/?id=2571711090",
+        SkyboxRt = "http://www.roblox.com/asset/?id=2571711090",
+        SkyboxUp = "http://www.roblox.com/asset/?id=2571711090"
+    },
+    ["Nebula"] = {
+        SkyboxBk = "rbxassetid://6277563515",
+        SkyboxDn = "rbxassetid://6277565742",
+        SkyboxFt = "rbxassetid://6277567481",
+        SkyboxLf = "rbxassetid://6277569562",
+        SkyboxRt = "rbxassetid://6277583250",
+        SkyboxUp = "rbxassetid://6277586065"
+    },
+    ["Dark Night"] = {
+        SkyboxBk = "rbxassetid://6285719338",
+        SkyboxDn = "rbxassetid://6285721078",
+        SkyboxFt = "rbxassetid://6285722964",
+        SkyboxLf = "rbxassetid://6285724682",
+        SkyboxRt = "rbxassetid://6285726335",
+        SkyboxUp = "rbxassetid://6285730635"
+    },
+    ["Space"] = {
+        SkyboxBk = "rbxassetid://877168885",
+        SkyboxDn = "rbxassetid://877169070",
+        SkyboxFt = "rbxassetid://877169154",
+        SkyboxLf = "rbxassetid://877169233",
+        SkyboxRt = "rbxassetid://877169317",
+        SkyboxUp = "rbxassetid://877169431"
+    },
+    ["Purple sky"] = {
+        SkyboxBk = "http://www.roblox.com/asset/?id=9971120429",
+        SkyboxDn = "http://www.roblox.com/asset/?id=9971120429",
+        SkyboxFt = "http://www.roblox.com/asset/?id=9971120429",
+        SkyboxLf = "http://www.roblox.com/asset/?id=9971120429",
+        SkyboxRt = "http://www.roblox.com/asset/?id=9971120429",
+        SkyboxUp = "http://www.roblox.com/asset/?id=9971120429"
+    },
+    ["Green sky"] = {
+        SkyboxBk = "http://www.roblox.com/asset/?id=8754359769",
+        SkyboxDn = "http://www.roblox.com/asset/?id=8754359769",
+        SkyboxFt = "http://www.roblox.com/asset/?id=8754359769",
+        SkyboxLf = "http://www.roblox.com/asset/?id=8754359769",
+        SkyboxRt = "http://www.roblox.com/asset/?id=8754359769",
+        SkyboxUp = "http://www.roblox.com/asset/?id=8754359769"
+    },
+    ["Meffsol sky"] = {
+        SkyboxBk = "http://www.roblox.com/asset/?id=9398566564",
+        SkyboxDn = "http://www.roblox.com/asset/?id=9398566564",
+        SkyboxFt = "http://www.roblox.com/asset/?id=9398566564",
+        SkyboxLf = "http://www.roblox.com/asset/?id=9398566564",
+        SkyboxRt = "http://www.roblox.com/asset/?id=9398566564",
+        SkyboxUp = "http://www.roblox.com/asset/?id=9398566564"
+    },
+    ["hd"] = {
+        SkyboxBk = "http://www.roblox.com/asset/?id=245710496",
+        SkyboxDn = "http://www.roblox.com/asset/?id=245710230",
+        SkyboxFt = "http://www.roblox.com/asset/?id=245710319",
+        SkyboxLf = "http://www.roblox.com/asset/?id=245710380",
+        SkyboxRt = "http://www.roblox.com/asset/?id=245710263",
+        SkyboxUp = "http://www.roblox.com/asset/?id=245710496"
+    },
+    ["spongebob"] = {
+        SkyboxBk = "rbxassetid://15962901054",
+        SkyboxDn = "rbxassetid://15962101128",
+        SkyboxFt = "rbxassetid://15970246218",
+        SkyboxLf = "rbxassetid://15962101128",
+        SkyboxRt = "rbxassetid://15912530252",
+        SkyboxUp = "rbxassetid://15962901054"
+    }
+}
+
+-- Дефолтные текстуры для сброса
+local defaultSkybox = {
+    SkyboxBk = "rbxassetid://600830446",
+    SkyboxDn = "rbxassetid://600831635",
+    SkyboxFt = "rbxassetid://600832720",
+    SkyboxLf = "rbxassetid://600886090",
+    SkyboxRt = "rbxassetid://600833862",
+    SkyboxUp = "rbxassetid://600835177"
+}
+
+-- Функция для применения skybox
+local function applySkybox(skyboxName)
+    if skyboxTextures[skyboxName] then
+        local textures = skyboxTextures[skyboxName]
+        Lighting.Sky.SkyboxBk = textures.SkyboxBk
+        Lighting.Sky.SkyboxDn = textures.SkyboxDn
+        Lighting.Sky.SkyboxFt = textures.SkyboxFt
+        Lighting.Sky.SkyboxLf = textures.SkyboxLf
+        Lighting.Sky.SkyboxRt = textures.SkyboxRt
+        Lighting.Sky.SkyboxUp = textures.SkyboxUp
+        Lighting.ClockTime = 12
+    end
+end
+
+-- Функция для сброса к дефолтному skybox
+local function resetToDefault()
+    Lighting.Sky.SkyboxBk = defaultSkybox.SkyboxBk
+    Lighting.Sky.SkyboxDn = defaultSkybox.SkyboxDn
+    Lighting.Sky.SkyboxFt = defaultSkybox.SkyboxFt
+    Lighting.Sky.SkyboxLf = defaultSkybox.SkyboxLf
+    Lighting.Sky.SkyboxRt = defaultSkybox.SkyboxRt
+    Lighting.Sky.SkyboxUp = defaultSkybox.SkyboxUp
+end
+
+-- Основной цикл для применения skybox
+spawn(function()
+    while true do
+        task.wait()
+        if getgenv().skybox then
+            applySkybox(getgenv().theskybox)
+        else
+            resetToDefault()
+        end
+    end
+end)
+
+-- Основной объект для управления
+local CustomSkyboxes = {}
+
+function CustomSkyboxes:Enable(enabled)
+    getgenv().skybox = enabled
+end
+
+function CustomSkyboxes:SetSkybox(skyboxName)
+    if table.find(skyboxes, skyboxName) then
+        getgenv().theskybox = skyboxName
+    else
+        warn("Неизвестный skybox: " .. tostring(skyboxName))
+    end
+end
+
+function CustomSkyboxes:GetAvailableSkyboxes()
+    return skyboxes
+end
+
+function CustomSkyboxes:GetCurrentSkybox()
+    return getgenv().theskybox
+end
+
+function CustomSkyboxes:IsEnabled()
+    return getgenv().skybox
+end
+
+-- Skybox Changer UI
+local SkyboxToggle = VisualsChinaHatSection:Toggle({
+    name = "Skybox Changer",
+    default = getgenv().skybox or false,
+    flag = "visual_skybox_changer",
+    callback = function(val)
+        CustomSkyboxes:Enable(val)
+    end
+})
+
+local SkyboxPopup = SkyboxToggle:Popup({size = 200})
+
+SkyboxPopup:Dropdown({
+    name = "Skybox",
+    values = skyboxes,
+    value = getgenv().theskybox or "Pink sky",
+    flag = "skybox_type",
+    callback = function(val)
+        CustomSkyboxes:SetSkybox(val)
     end
 })
 
