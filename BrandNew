@@ -6301,6 +6301,58 @@ spawn(function()
     end
 end)
 
+-- Game Buttons System
+-- Система кнопок для управления игрой
+
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+-- Переменные для отслеживания состояния
+local FindingServer = false
+
+-- Функция для переподключения к текущему серверу
+local function RejoinGame()
+    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+end
+
+
+
+-- Функция для копирования скрипта подключения в буфер обмена
+local function CopyJoinScript(UI_Library)
+    UI_Library.Notification({
+        Name = "Clipboard",
+        Description = "Successfully copied join script to clipboard!"
+    })
+
+    setclipboard(
+        string.format(
+            'game:GetService("TeleportService"):TeleportToPlaceInstance(%s, "%s")',
+            game.PlaceId,
+            game.JobId
+        )
+    )
+end
+
+-- Добавляем кнопки в ExtraSection
+ExtraSection:Button({ 
+    Name = "Rejoin Game", 
+    Confirm = true, 
+    Callback = function()
+        RejoinGame()
+    end
+})
+
+
+
+ExtraSection:Button({
+    Name = "Copy Join Script", 
+    Confirm = true, 
+    Callback = function()
+        CopyJoinScript(Library)
+    end
+})
+
 print("script is loaded. If u paid for this, u are retard")
 
 -- Вкладка Misc и секция Utils
