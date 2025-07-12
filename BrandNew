@@ -7632,6 +7632,19 @@ o.ShadowsPopup:Toggle({
     end
 })
 
+o.ShadowsPopup:Slider({
+    name = "Quality",
+    min = 0,
+    max = 1,
+    default = 0.5,
+    float = 0.01,
+    flag = "shadows_quality",
+    callback = function(value)
+        if o.LS then
+            o.LS.ShadowSoftness = value
+        end
+    end
+})
 -- Добавляем тогл Ambient с попапом
 o.AmbientToggle = o.WorldSection:Toggle({
     name = "Ambient",
@@ -7835,5 +7848,72 @@ mt.__newindex = newcclosure(function(self, key, value)
     
     return oldNewIndex(self, key, value)
 end)
+
+-- Aspect Ratio System
+local AspectRatioSettings = {
+    Enabled = false,
+    Horizontal = 100,
+    Vertical = 100
+}
+
+local function ApplyAspectRatio()
+    if not AspectRatioSettings.Enabled then return end
+    local Camera = workspace.CurrentCamera
+    if not Camera then return end
+    local X, Y, Z, R00, R01, R02, R10, R11, R12, R20, R21, R22 = Camera.CFrame:GetComponents()
+    Camera.CFrame = CFrame.new(
+        X, Y, Z,
+        R00 * AspectRatioSettings.Horizontal / 100,
+        R01 * AspectRatioSettings.Vertical / 100,
+        R02,
+        R10,
+        R11 * AspectRatioSettings.Vertical / 100,
+        R12,
+        R20 * AspectRatioSettings.Horizontal / 100,
+        R21 * AspectRatioSettings.Vertical / 100,
+        R22
+    )
+end
+
+if not getgenv().aspectRatioConnection then
+    getgenv().aspectRatioConnection = game:GetService("RunService").RenderStepped:Connect(function()
+        ApplyAspectRatio()
+    end)
+end
+
+local AspectRatioToggle = VisualsMainSection:Toggle({
+    name = "Aspect Ratio",
+    default = false,
+    flag = "visual_aspect_ratio",
+    callback = function(value)
+        AspectRatioSettings.Enabled = value
+    end
+})
+
+local AspectRatioPopup = AspectRatioToggle:Popup({size = 200})
+
+AspectRatioPopup:Slider({
+    name = "Horizontal",
+    min = 0,
+    max = 100,
+    default = 100,
+    float = 1,
+    flag = "aspect_ratio_horizontal",
+    callback = function(value)
+        AspectRatioSettings.Horizontal = value
+    end
+})
+
+AspectRatioPopup:Slider({
+    name = "Vertical",
+    min = 0,
+    max = 100,
+    default = 100,
+    float = 1,
+    flag = "aspect_ratio_vertical",
+    callback = function(value)
+        AspectRatioSettings.Vertical = value
+    end
+})
 
 setreadonly(mt, true)
