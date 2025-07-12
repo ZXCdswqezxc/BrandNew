@@ -274,6 +274,194 @@ function updateCrosshair() CrosshairLib.update() end
 -- Создаем секцию Main во вкладке Visuals
 VisualsMainSection = VisualsTab:Section({name = "Main", description = ">_<", side = "right"})
 
+-- Конфигурация Map Material
+MapMaterialConfig = {
+    Enabled = false,
+    Material = Enum.Material.Plastic,
+    OriginalMaterials = {},
+    OriginalTextures = {}
+}
+
+-- Функция для применения материала ко всем объектам
+function applyMapMaterial()
+    if not MapMaterialConfig.Enabled then return end
+    
+    local workspace = game:GetService("Workspace")
+    local selectedMaterial = MapMaterialConfig.Material
+    
+    -- Проходим по всем объектам в Workspace
+    local function processObject(obj)
+        if obj:IsA("BasePart") or obj:IsA("MeshPart") then
+            -- Используем pcall для обработки ошибок
+            pcall(function()
+                -- Сохраняем оригинальные настройки, если еще не сохранены
+                if not MapMaterialConfig.OriginalMaterials[obj] then
+                    MapMaterialConfig.OriginalMaterials[obj] = obj.Material
+                    
+                    -- Проверяем наличие свойства TextureID
+                    if obj:FindFirstChild("TextureID") then
+                        MapMaterialConfig.OriginalTextures[obj] = obj.TextureID
+                    end
+                end
+                
+                -- Применяем новый материал
+                obj.Material = selectedMaterial
+                
+                -- Пробуем убрать текстуру, если свойство существует
+                if obj:FindFirstChild("TextureID") then
+                    obj.TextureID = ""
+                end
+            end)
+        end
+        
+        -- Рекурсивно обрабатываем дочерние объекты с защитой от ошибок
+        pcall(function()
+            for _, child in ipairs(obj:GetChildren()) do
+                processObject(child)
+            end
+        end)
+    end
+    
+    -- Запускаем обработку с защитой от ошибок
+    pcall(function()
+        processObject(workspace)
+    end)
+end
+
+-- Функция для восстановления оригинальных материалов
+function restoreMapMaterial()
+    if MapMaterialConfig.Enabled then return end
+    
+    -- Восстанавливаем оригинальные материалы для всех объектов с защитой от ошибок
+    for obj, originalMaterial in pairs(MapMaterialConfig.OriginalMaterials) do
+        pcall(function()
+            if obj and obj.Parent then
+                obj.Material = originalMaterial
+                
+                -- Проверяем наличие свойства TextureID перед восстановлением
+                if MapMaterialConfig.OriginalTextures[obj] and obj:FindFirstChild("TextureID") then
+                    obj.TextureID = MapMaterialConfig.OriginalTextures[obj]
+                end
+            end
+        end)
+    end
+    
+    -- Очищаем сохраненные данные
+    MapMaterialConfig.OriginalMaterials = {}
+    MapMaterialConfig.OriginalTextures = {}
+end
+
+-- Добавляем тогл Map Material
+MapMaterialToggle = VisualsMainSection:Toggle({
+    name = "Map Material",
+    default = false,
+    flag = "visual_map_material",
+    callback = function(value)
+        MapMaterialConfig.Enabled = value
+        
+        if value then
+            applyMapMaterial()
+        else
+            restoreMapMaterial()
+        end
+    end
+})
+
+-- Создаем попап для Map Material
+MapMaterialPopup = MapMaterialToggle:Popup({size = 200})
+
+-- Добавляем выпадающий список для выбора материала
+MapMaterialPopup:Dropdown({
+    name = "Material",
+    values = {
+        "Plastic",
+        "Wood",
+        "Slate",
+        "Concrete",
+        "Brick",
+        "Metal",
+        "Fabric",
+        "Glass",
+        "Neon",
+        "ForceField",
+        "SmoothPlastic",
+        "Grass",
+        "Sand",
+        "Ice",
+        "CrackedLava",
+        "Rock",
+        "Glacier",
+        "Snow",
+        "Sandstone",
+        "Mud",
+        "Basalt",
+        "Ground",
+        "LeafyGrass",
+        "Salt",
+        "Limestone",
+        "Pavement",
+        "Cobblestone",
+        "Asphalt",
+        "WoodPlanks",
+        "CorrodedMetal",
+        "DiamondPlate",
+        "Foil",
+        "Granite",
+        "Marble",
+        "Pebble"
+    },
+    value = "Plastic",
+    flag = "map_material_type",
+    callback = function(materialName)
+        -- Преобразуем название материала в Enum
+        local materialMap = {
+            Plastic = Enum.Material.Plastic,
+            Wood = Enum.Material.Wood,
+            Slate = Enum.Material.Slate,
+            Concrete = Enum.Material.Concrete,
+            Brick = Enum.Material.Brick,
+            Metal = Enum.Material.Metal,
+            Fabric = Enum.Material.Fabric,
+            Glass = Enum.Material.Glass,
+            Neon = Enum.Material.Neon,
+            ForceField = Enum.Material.ForceField,
+            SmoothPlastic = Enum.Material.SmoothPlastic,
+            Grass = Enum.Material.Grass,
+            Sand = Enum.Material.Sand,
+            Ice = Enum.Material.Ice,
+            CrackedLava = Enum.Material.CrackedLava,
+            Rock = Enum.Material.Rock,
+            Glacier = Enum.Material.Glacier,
+            Snow = Enum.Material.Snow,
+            Sandstone = Enum.Material.Sandstone,
+            Mud = Enum.Material.Mud,
+            Basalt = Enum.Material.Basalt,
+            Ground = Enum.Material.Ground,
+            LeafyGrass = Enum.Material.LeafyGrass,
+            Salt = Enum.Material.Salt,
+            Limestone = Enum.Material.Limestone,
+            Pavement = Enum.Material.Pavement,
+            Cobblestone = Enum.Material.Cobblestone,
+            Asphalt = Enum.Material.Asphalt,
+            WoodPlanks = Enum.Material.WoodPlanks,
+            CorrodedMetal = Enum.Material.CorrodedMetal,
+            DiamondPlate = Enum.Material.DiamondPlate,
+            Foil = Enum.Material.Foil,
+            Granite = Enum.Material.Granite,
+            Marble = Enum.Material.Marble,
+            Pebble = Enum.Material.Pebble
+            -- Rust удален, так как не является валидным материалом
+        }
+        
+        MapMaterialConfig.Material = materialMap[materialName] or Enum.Material.Plastic
+        
+        -- Если функция включена, сразу применяем новый материал
+        if MapMaterialConfig.Enabled then
+            applyMapMaterial()
+        end
+    end
+})
+
 -- Crosshair UI (использует глобальную CrosshairSettings, не объявляем её заново!)
 local CrosshairToggle = VisualsMainSection:Toggle({
     name = "Crosshair",
