@@ -17,7 +17,7 @@ OptURL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main
 o = loadstring(game:HttpGet(OptURL))() or {}
 
 -- Загрузка UI библиотеки
-URL = "https://raw.githubusercontent.com/ZXCdswqezxc/BrandNew/refs/heads/main/jerk"
+URL = "https://raw.githubusercontent.com/ZXCdswqezxc/img/refs/heads/main/ad
 Library = loadstring(game:HttpGet(URL))()
 
 -- Примечание: Игнорируйте ошибки линтера, связанные с функциями API эксплойта, такими как:
