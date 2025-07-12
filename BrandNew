@@ -2455,6 +2455,1150 @@ if not o.tracersPlayerRemovingConnection then
     end)
 end
 
+---------------------------------------------------------------------
+-- ESP SYSTEM -------------------------------------------------------
+---------------------------------------------------------------------
+
+-- Конфигурация ESP
+ESPConfig = {
+    Enabled = false,
+    MaxDistance = 5000,
+    
+    Box = {
+        Enabled = false,
+        Players = {
+            Enabled = false,
+            Color = Color3.fromRGB(255, 255, 255),
+            Filled = false,
+            FilledTransparency = 1,
+            FilledColor = Color3.fromRGB(255, 0, 0)
+        },
+        Friends = {
+            Enabled = false,
+            Color = Color3.fromRGB(0, 255, 0),
+            Filled = false,
+            FilledTransparency = 1,
+            FilledColor = Color3.fromRGB(0, 255, 0)
+        },
+        Self = {
+            Enabled = false,
+            Color = Color3.fromRGB(0, 170, 255),
+            Filled = false,
+            FilledTransparency = 1,
+            FilledColor = Color3.fromRGB(0, 170, 255)
+        }
+    },
+    
+    Name = {
+        Enabled = false,
+        Players = {
+            Enabled = false,
+            Color = Color3.fromRGB(255, 255, 255),
+            Size = 13
+        },
+        Friends = {
+            Enabled = false,
+            Color = Color3.fromRGB(0, 255, 0),
+            Size = 13
+        },
+        Self = {
+            Enabled = false,
+            Color = Color3.fromRGB(0, 170, 255),
+            Size = 13
+        }
+    },
+    
+    Weapon = {
+        Enabled = false,
+        Players = {
+            Enabled = false,
+            Color = Color3.fromRGB(255, 255, 255),
+            Size = 13
+        },
+        Friends = {
+            Enabled = false,
+            Color = Color3.fromRGB(0, 255, 0),
+            Size = 13
+        },
+        Self = {
+            Enabled = false,
+            Color = Color3.fromRGB(0, 170, 255),
+            Size = 13
+        }
+    },
+    
+    Health = {
+        Enabled = false,
+        Players = {
+            Enabled = false,
+            ColorFull = Color3.fromRGB(0, 255, 0),
+            ColorEmpty = Color3.fromRGB(255, 0, 0)
+        },
+        Friends = {
+            Enabled = false,
+            ColorFull = Color3.fromRGB(0, 255, 0),
+            ColorEmpty = Color3.fromRGB(255, 0, 0)
+        },
+        Self = {
+            Enabled = false,
+            ColorFull = Color3.fromRGB(0, 255, 0),
+            ColorEmpty = Color3.fromRGB(255, 0, 0)
+        }
+    },
+    
+    Armor = {
+        Enabled = false,
+        Players = {
+            Enabled = false,
+            ColorFull = Color3.fromRGB(0, 170, 255),
+            ColorEmpty = Color3.fromRGB(40, 40, 40)
+        },
+        Friends = {
+            Enabled = false,
+            ColorFull = Color3.fromRGB(0, 170, 255),
+            ColorEmpty = Color3.fromRGB(40, 40, 40)
+        },
+        Self = {
+            Enabled = false,
+            ColorFull = Color3.fromRGB(0, 170, 255),
+            ColorEmpty = Color3.fromRGB(40, 40, 40)
+        }
+    }
+}
+
+-- ESP объекты
+ESPObjects = {}
+
+-- Функция для создания ESP объекта
+function createESPObject(player)
+    if not player then return nil end
+    
+    if ESPObjects[player] then return ESPObjects[player] end
+    
+    local box = Drawing.new("Square")
+    local boxOutline = Drawing.new("Square")
+    local name = Drawing.new("Text")
+    local weapon = Drawing.new("Text")
+    local hpBack = Drawing.new("Square")
+    local hpFill = Drawing.new("Square")
+    local armorBack = Drawing.new("Square")
+    local armorFill = Drawing.new("Square")
+    
+    -- Настройка текстовых объектов
+    name.Center = true
+    name.Outline = true
+    name.Font = Drawing.Fonts.Plex
+    
+    weapon.Center = true
+    weapon.Outline = true
+    weapon.Font = Drawing.Fonts.Plex
+    
+    ESPObjects[player] = {
+        box = box,
+        boxOutline = boxOutline,
+        name = name,
+        weapon = weapon,
+        hpBack = hpBack,
+        hpFill = hpFill,
+        armorBack = armorBack,
+        armorFill = armorFill
+    }
+    
+    return ESPObjects[player]
+end
+
+-- Функция для удаления ESP объекта
+function removeESPObject(player)
+    local esp = ESPObjects[player]
+    if not esp then return end
+    
+    for _, obj in pairs(esp) do
+        if obj and obj.Remove then
+            pcall(function() obj:Remove() end)
+        end
+    end
+    
+    ESPObjects[player] = nil
+end
+
+-- Функция для получения цвета с анимацией
+function getAnimatedColor(color1, color2, enabled, speed)
+    if not enabled then return color1 end
+    local phase = (tick() * (speed or 1)) % 1
+    return Color3.new(
+        color1.R + (color2.R - color1.R) * phase,
+        color1.G + (color2.G - color1.G) * phase,
+        color1.B + (color2.B - color1.B) * phase
+    )
+end
+
+-- Функция для проверки, является ли игрок другом
+function isFriend(player)
+    if not player or not player.Name then return false end
+    
+    -- Отладочная информация для проверки списка друзей
+    local isFriendResult = MaterialChamsConfig.Friend.Friends[player.Name] == true
+    if isFriendResult then
+        print("Player", player.Name, "is in friends list")
+    end
+    
+    return isFriendResult
+end
+
+-- Функция для получения конфигурации ESP в зависимости от типа игрока
+function getESPConfig(player)
+    if not player then return "Players" end
+    
+    -- Проверяем, является ли это локальным игроком
+    if player == o.lp then
+        return "Self"
+    end
+    
+    -- Проверяем, является ли игрок другом
+    if isFriend(player) then
+        return "Friends"
+    end
+    
+    -- По умолчанию - обычный игрок
+    return "Players"
+end
+
+-- Главная функция обновления ESP
+function updateESP()
+    if not ESPConfig.Enabled then
+        for _, esp in pairs(ESPObjects) do
+            for _, obj in pairs(esp) do
+                obj.Visible = false
+            end
+        end
+        return
+    end
+    
+    -- Обрабатываем всех игроков, включая локального игрока для Self режима
+    for _, player in ipairs(o.plrs:GetPlayers()) do
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        
+        local esp = createESPObject(player)
+        if not esp then continue end
+        
+        local configType = getESPConfig(player)
+        
+        if hrp and humanoid and humanoid.Health > 0 then
+                local head = char:FindFirstChild("Head")
+                local rootPos, onScreen = o.camera:WorldToViewportPoint(hrp.Position)
+                local distance = (o.camera.CFrame.Position - hrp.Position).Magnitude
+                
+                if head and onScreen and distance <= ESPConfig.MaxDistance then
+                    local headPos = o.camera:WorldToViewportPoint(head.Position)
+                    local legPos = o.camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                    local height = math.abs(headPos.Y - legPos.Y)
+                    local width = height / 1.7
+                    local topY = math.min(headPos.Y, legPos.Y)
+                    local boxPos = Vector2.new(rootPos.X - width/2, topY)
+                    local boxSize = Vector2.new(width, height)
+                    
+                    -- Box ESP
+                    if ESPConfig.Box.Enabled and ESPConfig.Box[configType] and ESPConfig.Box[configType].Enabled then
+                        local boxConfig = ESPConfig.Box[configType]
+                        esp.box.Size = boxSize
+                        esp.box.Position = boxPos
+                        esp.box.Visible = true
+                        esp.box.Filled = boxConfig.Filled
+                        esp.box.Thickness = 1
+                        esp.box.Color = boxConfig.Color
+                        esp.box.Transparency = boxConfig.FilledTransparency or 1
+                        
+                        esp.boxOutline.Size = boxSize + Vector2.new(2, 2)
+                        esp.boxOutline.Position = boxPos - Vector2.new(1, 1)
+                        esp.boxOutline.Visible = true
+                        esp.boxOutline.Filled = false
+                        esp.boxOutline.Thickness = 1
+                        esp.boxOutline.Color = Color3.new(0, 0, 0)
+                    else
+                        esp.box.Visible = false
+                        esp.boxOutline.Visible = false
+                    end
+                    
+                    -- Health Bar
+                    if ESPConfig.Health.Enabled and ESPConfig.Health[configType] and ESPConfig.Health[configType].Enabled then
+                        local healthConfig = ESPConfig.Health[configType]
+                        local ratio = humanoid.Health / humanoid.MaxHealth
+                        local hbX = boxPos.X - 5
+                        
+                        esp.hpBack.Size = Vector2.new(2, height)
+                        esp.hpBack.Position = Vector2.new(hbX, boxPos.Y)
+                        esp.hpBack.Color = healthConfig.ColorEmpty
+                        esp.hpBack.Visible = true
+                        esp.hpBack.Filled = true
+                        
+                        esp.hpFill.Size = Vector2.new(2, height * ratio)
+                        esp.hpFill.Position = Vector2.new(hbX, boxPos.Y + height * (1 - ratio))
+                        esp.hpFill.Color = healthConfig.ColorFull
+                        esp.hpFill.Visible = true
+                        esp.hpFill.Filled = true
+                    else
+                        esp.hpBack.Visible = false
+                        esp.hpFill.Visible = false
+                    end
+                    
+                    -- Armor Bar
+                    if ESPConfig.Armor.Enabled and ESPConfig.Armor[configType] and ESPConfig.Armor[configType].Enabled then
+                        local armorConfig = ESPConfig.Armor[configType]
+                        local armorVal = 0
+                        local armorMax = 200
+                        
+                        local dataFolder = player:FindFirstChild("DataFolder")
+                        if dataFolder then
+                            local info = dataFolder:FindFirstChild("Information")
+                            if info and info:FindFirstChild("Armor") then
+                                armorVal = info.Armor.Value
+                            end
+                        end
+                        
+                        local arRatio = math.clamp(armorVal / armorMax, 0, 1)
+                        local abX = boxPos.X + width + 5
+                        
+                        esp.armorBack.Size = Vector2.new(2, height)
+                        esp.armorBack.Position = Vector2.new(abX, boxPos.Y)
+                        esp.armorBack.Color = armorConfig.ColorEmpty
+                        esp.armorBack.Visible = true
+                        esp.armorBack.Filled = true
+                        
+                        esp.armorFill.Size = Vector2.new(2, height * arRatio)
+                        esp.armorFill.Position = Vector2.new(abX, boxPos.Y + height * (1 - arRatio))
+                        esp.armorFill.Color = armorConfig.ColorFull
+                        esp.armorFill.Visible = true
+                        esp.armorFill.Filled = true
+                    else
+                        esp.armorBack.Visible = false
+                        esp.armorFill.Visible = false
+                    end
+                    
+                    -- Name ESP
+                    if ESPConfig.Name.Enabled and ESPConfig.Name[configType] and ESPConfig.Name[configType].Enabled then
+                        local nameConfig = ESPConfig.Name[configType]
+                        esp.name.Text = player.Name
+                        esp.name.Position = Vector2.new(rootPos.X, boxPos.Y - 16)
+                        esp.name.Size = nameConfig.Size
+                        esp.name.Color = nameConfig.Color
+                        esp.name.Visible = true
+                    else
+                        esp.name.Visible = false
+                    end
+                    
+                    -- Weapon ESP
+                    if ESPConfig.Weapon.Enabled and ESPConfig.Weapon[configType] and ESPConfig.Weapon[configType].Enabled then
+                        local weaponConfig = ESPConfig.Weapon[configType]
+                        local toolHeld = "None"
+                        local tool = char:FindFirstChildOfClass("Tool")
+                        if tool then toolHeld = tool.Name end
+                        
+                        esp.weapon.Text = toolHeld
+                        esp.weapon.Position = Vector2.new(rootPos.X, topY + height + 2)
+                        esp.weapon.Size = weaponConfig.Size
+                        esp.weapon.Color = weaponConfig.Color
+                        esp.weapon.Visible = true
+                    else
+                        esp.weapon.Visible = false
+                    end
+                else
+                    for _, obj in pairs(esp) do
+                        obj.Visible = false
+                    end
+                end
+            else
+                for _, obj in pairs(esp) do
+                    obj.Visible = false
+                end
+            end
+        end
+    end
+
+
+-- Создаем соединение для обновления ESP
+if not o.espConnection then
+    o.espConnection = o.rs.RenderStepped:Connect(updateESP)
+end
+
+-- Создаем соединение для добавления новых игроков
+if not o.espPlayerAddedConnection then
+    o.espPlayerAddedConnection = o.plrs.PlayerAdded:Connect(function(player)
+        if ESPConfig.Enabled then
+            createESPObject(player)
+        end
+    end)
+end
+
+-- Создаем соединение для удаления игроков
+if not o.espPlayerRemovingConnection then
+    o.espPlayerRemovingConnection = o.plrs.PlayerRemoving:Connect(function(player)
+        removeESPObject(player)
+    end)
+end
+
+-- Добавляем ESP тогл в секцию Visuals
+ESPToggle = VisualsMainSection:Toggle({
+    name = "ESP",
+    default = false,
+    flag = "visual_esp",
+    callback = function(value)
+        ESPConfig.Enabled = value
+        
+        if not value then
+            -- Отключаем все ESP элементы
+            for _, esp in pairs(ESPObjects) do
+                for _, obj in pairs(esp) do
+                    obj.Visible = false
+                end
+            end
+        end
+    end
+})
+
+-- Создаем попап для ESP
+ESPPopup = ESPToggle:Popup({size = 300})
+
+-- Box ESP
+BoxESPToggle = ESPPopup:Toggle({
+    name = "Box",
+    default = false,
+    flag = "esp_box",
+    callback = function(value)
+        ESPConfig.Box.Enabled = value
+        
+        if not value then
+            -- Отключаем все box ESP
+            for _, esp in pairs(ESPObjects) do
+                esp.box.Visible = false
+                esp.boxOutline.Visible = false
+            end
+        end
+    end
+})
+
+BoxESPPopup = BoxESPToggle:Popup({size = 250})
+
+-- Players Box
+PlayersBoxToggle = BoxESPPopup:Toggle({
+    name = "Players",
+    default = false,
+    flag = "esp_box_players",
+    callback = function(value)
+        ESPConfig.Box.Players.Enabled = value
+    end
+})
+
+PlayersBoxPopup = PlayersBoxToggle:Popup({size = 200})
+
+PlayersBoxPopup:Colorpicker({
+    name = "Box Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "esp_box_players_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Box.Players.Color = color.c
+        else
+            ESPConfig.Box.Players.Color = color
+        end
+    end
+})
+
+PlayersBoxPopup:Toggle({
+    name = "Box Filled",
+    flag = "esp_box_players_filled",
+    default = false,
+    callback = function(value)
+        ESPConfig.Box.Players.Filled = value
+    end
+})
+
+PlayersBoxPopup:Slider({
+    name = "Filled Transparency",
+    min = 0,
+    max = 1,
+    float = 0.01,
+    default = 1,
+    flag = "esp_box_players_filled_transparency",
+    callback = function(val)
+        ESPConfig.Box.Players.FilledTransparency = val
+    end
+})
+
+PlayersBoxPopup:Colorpicker({
+    name = "Filled Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 0, 0),
+    flag = "esp_box_players_filled_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Box.Players.FilledColor = color.c
+        else
+            ESPConfig.Box.Players.FilledColor = color
+        end
+    end
+})
+
+-- Friends Box
+FriendsBoxToggle = BoxESPPopup:Toggle({
+    name = "Friends",
+    default = false,
+    flag = "esp_box_friends",
+    callback = function(value)
+        ESPConfig.Box.Friends.Enabled = value
+    end
+})
+
+FriendsBoxPopup = FriendsBoxToggle:Popup({size = 200})
+
+FriendsBoxPopup:Colorpicker({
+    name = "Box Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "esp_box_friends_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Box.Friends.Color = color.c
+        else
+            ESPConfig.Box.Friends.Color = color
+        end
+    end
+})
+
+FriendsBoxPopup:Toggle({
+    name = "Box Filled",
+    flag = "esp_box_friends_filled",
+    default = false,
+    callback = function(value)
+        ESPConfig.Box.Friends.Filled = value
+    end
+})
+
+FriendsBoxPopup:Slider({
+    name = "Filled Transparency",
+    min = 0,
+    max = 1,
+    float = 0.01,
+    default = 1,
+    flag = "esp_box_friends_filled_transparency",
+    callback = function(val)
+        ESPConfig.Box.Friends.FilledTransparency = val
+    end
+})
+
+FriendsBoxPopup:Colorpicker({
+    name = "Filled Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "esp_box_friends_filled_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Box.Friends.FilledColor = color.c
+        else
+            ESPConfig.Box.Friends.FilledColor = color
+        end
+    end
+})
+
+-- Self Box
+SelfBoxToggle = BoxESPPopup:Toggle({
+    name = "Self",
+    default = false,
+    flag = "esp_box_self",
+    callback = function(value)
+        ESPConfig.Box.Self.Enabled = value
+    end
+})
+
+SelfBoxPopup = SelfBoxToggle:Popup({size = 200})
+
+SelfBoxPopup:Colorpicker({
+    name = "Box Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "esp_box_self_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Box.Self.Color = color.c
+        else
+            ESPConfig.Box.Self.Color = color
+        end
+    end
+})
+
+SelfBoxPopup:Toggle({
+    name = "Box Filled",
+    flag = "esp_box_self_filled",
+    default = false,
+    callback = function(value)
+        ESPConfig.Box.Self.Filled = value
+    end
+})
+
+SelfBoxPopup:Slider({
+    name = "Filled Transparency",
+    min = 0,
+    max = 1,
+    float = 0.01,
+    default = 1,
+    flag = "esp_box_self_filled_transparency",
+    callback = function(val)
+        ESPConfig.Box.Self.FilledTransparency = val
+    end
+})
+
+SelfBoxPopup:Colorpicker({
+    name = "Filled Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "esp_box_self_filled_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Box.Self.FilledColor = color.c
+        else
+            ESPConfig.Box.Self.FilledColor = color
+        end
+    end
+})
+
+-- Name ESP
+NameESPToggle = ESPPopup:Toggle({
+    name = "Name",
+    default = false,
+    flag = "esp_name",
+    callback = function(value)
+        ESPConfig.Name.Enabled = value
+        
+        if not value then
+            for _, esp in pairs(ESPObjects) do
+                esp.name.Visible = false
+            end
+        end
+    end
+})
+
+NameESPPopup = NameESPToggle:Popup({size = 250})
+
+-- Players Name
+PlayersNameToggle = NameESPPopup:Toggle({
+    name = "Players",
+    default = false,
+    flag = "esp_name_players",
+    callback = function(value)
+        ESPConfig.Name.Players.Enabled = value
+    end
+})
+
+PlayersNamePopup = PlayersNameToggle:Popup({size = 200})
+
+PlayersNamePopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "esp_name_players_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Name.Players.Color = color.c
+        else
+            ESPConfig.Name.Players.Color = color
+        end
+    end
+})
+
+PlayersNamePopup:Slider({
+    name = "Size",
+    min = 8,
+    max = 20,
+    default = 13,
+    flag = "esp_name_players_size",
+    callback = function(value)
+        ESPConfig.Name.Players.Size = value
+    end
+})
+
+-- Friends Name
+FriendsNameToggle = NameESPPopup:Toggle({
+    name = "Friends",
+    default = false,
+    flag = "esp_name_friends",
+    callback = function(value)
+        ESPConfig.Name.Friends.Enabled = value
+    end
+})
+
+FriendsNamePopup = FriendsNameToggle:Popup({size = 200})
+
+FriendsNamePopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "esp_name_friends_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Name.Friends.Color = color.c
+        else
+            ESPConfig.Name.Friends.Color = color
+        end
+    end
+})
+
+FriendsNamePopup:Slider({
+    name = "Size",
+    min = 8,
+    max = 20,
+    default = 13,
+    flag = "esp_name_friends_size",
+    callback = function(value)
+        ESPConfig.Name.Friends.Size = value
+    end
+})
+
+-- Self Name
+SelfNameToggle = NameESPPopup:Toggle({
+    name = "Self",
+    default = false,
+    flag = "esp_name_self",
+    callback = function(value)
+        ESPConfig.Name.Self.Enabled = value
+    end
+})
+
+SelfNamePopup = SelfNameToggle:Popup({size = 200})
+
+SelfNamePopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "esp_name_self_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Name.Self.Color = color.c
+        else
+            ESPConfig.Name.Self.Color = color
+        end
+    end
+})
+
+SelfNamePopup:Slider({
+    name = "Size",
+    min = 8,
+    max = 20,
+    default = 13,
+    flag = "esp_name_self_size",
+    callback = function(value)
+        ESPConfig.Name.Self.Size = value
+    end
+})
+
+-- Weapon ESP
+WeaponESPToggle = ESPPopup:Toggle({
+    name = "Weapon",
+    default = false,
+    flag = "esp_weapon",
+    callback = function(value)
+        ESPConfig.Weapon.Enabled = value
+        
+        if not value then
+            for _, esp in pairs(ESPObjects) do
+                esp.weapon.Visible = false
+            end
+        end
+    end
+})
+
+WeaponESPPopup = WeaponESPToggle:Popup({size = 250})
+
+-- Players Weapon
+PlayersWeaponToggle = WeaponESPPopup:Toggle({
+    name = "Players",
+    default = false,
+    flag = "esp_weapon_players",
+    callback = function(value)
+        ESPConfig.Weapon.Players.Enabled = value
+    end
+})
+
+PlayersWeaponPopup = PlayersWeaponToggle:Popup({size = 200})
+
+PlayersWeaponPopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 255, 255),
+    flag = "esp_weapon_players_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Weapon.Players.Color = color.c
+        else
+            ESPConfig.Weapon.Players.Color = color
+        end
+    end
+})
+
+PlayersWeaponPopup:Slider({
+    name = "Size",
+    min = 8,
+    max = 20,
+    default = 13,
+    flag = "esp_weapon_players_size",
+    callback = function(value)
+        ESPConfig.Weapon.Players.Size = value
+    end
+})
+
+-- Friends Weapon
+FriendsWeaponToggle = WeaponESPPopup:Toggle({
+    name = "Friends",
+    default = false,
+    flag = "esp_weapon_friends",
+    callback = function(value)
+        ESPConfig.Weapon.Friends.Enabled = value
+    end
+})
+
+FriendsWeaponPopup = FriendsWeaponToggle:Popup({size = 200})
+
+FriendsWeaponPopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "esp_weapon_friends_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Weapon.Friends.Color = color.c
+        else
+            ESPConfig.Weapon.Friends.Color = color
+        end
+    end
+})
+
+FriendsWeaponPopup:Slider({
+    name = "Size",
+    min = 8,
+    max = 20,
+    default = 13,
+    flag = "esp_weapon_friends_size",
+    callback = function(value)
+        ESPConfig.Weapon.Friends.Size = value
+    end
+})
+
+-- Self Weapon
+SelfWeaponToggle = WeaponESPPopup:Toggle({
+    name = "Self",
+    default = false,
+    flag = "esp_weapon_self",
+    callback = function(value)
+        ESPConfig.Weapon.Self.Enabled = value
+    end
+})
+
+SelfWeaponPopup = SelfWeaponToggle:Popup({size = 200})
+
+SelfWeaponPopup:Colorpicker({
+    name = "Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "esp_weapon_self_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Weapon.Self.Color = color.c
+        else
+            ESPConfig.Weapon.Self.Color = color
+        end
+    end
+})
+
+SelfWeaponPopup:Slider({
+    name = "Size",
+    min = 8,
+    max = 20,
+    default = 13,
+    flag = "esp_weapon_self_size",
+    callback = function(value)
+        ESPConfig.Weapon.Self.Size = value
+    end
+})
+
+-- Health ESP
+HealthESPToggle = ESPPopup:Toggle({
+    name = "Health",
+    default = false,
+    flag = "esp_health",
+    callback = function(value)
+        ESPConfig.Health.Enabled = value
+        
+        if not value then
+            for _, esp in pairs(ESPObjects) do
+                esp.hpBack.Visible = false
+                esp.hpFill.Visible = false
+            end
+        end
+    end
+})
+
+HealthESPPopup = HealthESPToggle:Popup({size = 250})
+
+-- Players Health
+PlayersHealthToggle = HealthESPPopup:Toggle({
+    name = "Players",
+    default = false,
+    flag = "esp_health_players",
+    callback = function(value)
+        ESPConfig.Health.Players.Enabled = value
+    end
+})
+
+PlayersHealthPopup = PlayersHealthToggle:Popup({size = 200})
+
+PlayersHealthPopup:Colorpicker({
+    name = "Full Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "esp_health_players_full_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Health.Players.ColorFull = color.c
+        else
+            ESPConfig.Health.Players.ColorFull = color
+        end
+    end
+})
+
+PlayersHealthPopup:Colorpicker({
+    name = "Empty Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 0, 0),
+    flag = "esp_health_players_empty_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Health.Players.ColorEmpty = color.c
+        else
+            ESPConfig.Health.Players.ColorEmpty = color
+        end
+    end
+})
+
+-- Friends Health
+FriendsHealthToggle = HealthESPPopup:Toggle({
+    name = "Friends",
+    default = false,
+    flag = "esp_health_friends",
+    callback = function(value)
+        ESPConfig.Health.Friends.Enabled = value
+    end
+})
+
+FriendsHealthPopup = FriendsHealthToggle:Popup({size = 200})
+
+FriendsHealthPopup:Colorpicker({
+    name = "Full Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "esp_health_friends_full_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Health.Friends.ColorFull = color.c
+        else
+            ESPConfig.Health.Friends.ColorFull = color
+        end
+    end
+})
+
+FriendsHealthPopup:Colorpicker({
+    name = "Empty Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 0, 0),
+    flag = "esp_health_friends_empty_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Health.Friends.ColorEmpty = color.c
+        else
+            ESPConfig.Health.Friends.ColorEmpty = color
+        end
+    end
+})
+
+-- Self Health
+SelfHealthToggle = HealthESPPopup:Toggle({
+    name = "Self",
+    default = false,
+    flag = "esp_health_self",
+    callback = function(value)
+        ESPConfig.Health.Self.Enabled = value
+    end
+})
+
+SelfHealthPopup = SelfHealthToggle:Popup({size = 200})
+
+SelfHealthPopup:Colorpicker({
+    name = "Full Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 255, 0),
+    flag = "esp_health_self_full_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Health.Self.ColorFull = color.c
+        else
+            ESPConfig.Health.Self.ColorFull = color
+        end
+    end
+})
+
+SelfHealthPopup:Colorpicker({
+    name = "Empty Color",
+    description = ">_<",
+    default = Color3.fromRGB(255, 0, 0),
+    flag = "esp_health_self_empty_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Health.Self.ColorEmpty = color.c
+        else
+            ESPConfig.Health.Self.ColorEmpty = color
+        end
+    end
+})
+
+-- Armor ESP
+ArmorESPToggle = ESPPopup:Toggle({
+    name = "Armor",
+    default = false,
+    flag = "esp_armor",
+    callback = function(value)
+        ESPConfig.Armor.Enabled = value
+        
+        if not value then
+            for _, esp in pairs(ESPObjects) do
+                esp.armorBack.Visible = false
+                esp.armorFill.Visible = false
+            end
+        end
+    end
+})
+
+ArmorESPPopup = ArmorESPToggle:Popup({size = 250})
+
+-- Players Armor
+PlayersArmorToggle = ArmorESPPopup:Toggle({
+    name = "Players",
+    default = false,
+    flag = "esp_armor_players",
+    callback = function(value)
+        ESPConfig.Armor.Players.Enabled = value
+    end
+})
+
+PlayersArmorPopup = PlayersArmorToggle:Popup({size = 200})
+
+PlayersArmorPopup:Colorpicker({
+    name = "Full Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "esp_armor_players_full_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Armor.Players.ColorFull = color.c
+        else
+            ESPConfig.Armor.Players.ColorFull = color
+        end
+    end
+})
+
+PlayersArmorPopup:Colorpicker({
+    name = "Empty Color",
+    description = ">_<",
+    default = Color3.fromRGB(40, 40, 40),
+    flag = "esp_armor_players_empty_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Armor.Players.ColorEmpty = color.c
+        else
+            ESPConfig.Armor.Players.ColorEmpty = color
+        end
+    end
+})
+
+-- Friends Armor
+FriendsArmorToggle = ArmorESPPopup:Toggle({
+    name = "Friends",
+    default = false,
+    flag = "esp_armor_friends",
+    callback = function(value)
+        ESPConfig.Armor.Friends.Enabled = value
+    end
+})
+
+FriendsArmorPopup = FriendsArmorToggle:Popup({size = 200})
+
+FriendsArmorPopup:Colorpicker({
+    name = "Full Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "esp_armor_friends_full_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Armor.Friends.ColorFull = color.c
+        else
+            ESPConfig.Armor.Friends.ColorFull = color
+        end
+    end
+})
+
+FriendsArmorPopup:Colorpicker({
+    name = "Empty Color",
+    description = ">_<",
+    default = Color3.fromRGB(40, 40, 40),
+    flag = "esp_armor_friends_empty_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Armor.Friends.ColorEmpty = color.c
+        else
+            ESPConfig.Armor.Friends.ColorEmpty = color
+        end
+    end
+})
+
+-- Self Armor
+SelfArmorToggle = ArmorESPPopup:Toggle({
+    name = "Self",
+    default = false,
+    flag = "esp_armor_self",
+    callback = function(value)
+        ESPConfig.Armor.Self.Enabled = value
+    end
+})
+
+SelfArmorPopup = SelfArmorToggle:Popup({size = 200})
+
+SelfArmorPopup:Colorpicker({
+    name = "Full Color",
+    description = ">_<",
+    default = Color3.fromRGB(0, 170, 255),
+    flag = "esp_armor_self_full_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Armor.Self.ColorFull = color.c
+        else
+            ESPConfig.Armor.Self.ColorFull = color
+        end
+    end
+})
+
+SelfArmorPopup:Colorpicker({
+    name = "Empty Color",
+    description = ">_<",
+    default = Color3.fromRGB(40, 40, 40),
+    flag = "esp_armor_self_empty_color",
+    callback = function(color)
+        if type(color) == "table" and color.c then
+            ESPConfig.Armor.Self.ColorEmpty = color.c
+        else
+            ESPConfig.Armor.Self.ColorEmpty = color
+        end
+    end
+})
+
 -- Создаем секцию Main во вкладке Player
 PlayerMainSection = PlayerTab:Section({name = "Main", description = ">_<"})
 
@@ -2523,7 +3667,7 @@ PlayerMainSection:Toggle({
                             o.common_vars.hrp = o.common_vars.char:FindFirstChild("HumanoidRootPart")
                             if o.common_vars.hrp and o.common_vars.hrp:IsDescendantOf(game) and o.camera then
                                 pcall(function()
-                                o.common_vars.hrp.CFrame = o.funcs.cf(o.common_vars.hrp.Position) * 
+                                o.common_vars.hrp.CFrame = o.common_vars.hrp.CFrame * 
                                     CFrame.Angles(0, math.atan2(-o.camera.CFrame.LookVector.X, -o.camera.CFrame.LookVector.Z), 0)
                                 end)
                             end
@@ -2879,7 +4023,7 @@ function SetNameDisplay(enabled, mode)
                         o.common_vars.hum.DisplayName = player.Name
                         o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
                     elseif o.NameDisplayMode == "none" then
-                        -- Полностью скрываем имя, устанавливая пустую строку И делая его прозрачным
+                        -- Полностью скрываем имя, устанавливая пустую строку И делаем его прозрачным
                         o.common_vars.hum.DisplayName = ""
                         o.common_vars.hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
                         -- Для дополнительной надежности также пробуем другие методы скрытия имени
@@ -5683,12 +6827,6 @@ o.FovChangerToggle:Popup({size = 150}):Slider({
     end
 })
 
--- Функционал Save Walkspeed удален
-
--- Функционал Jump Power удален
-
--- ChatSpy функционал удален
-
 -- Создаем секцию PlayerActions во вкладке Misc (слева)
 PlayerActionsSection = MiscTab:Section({name = "Player Actions", description = ">_<", side = "left"})
 
@@ -6511,176 +7649,3 @@ mt.__newindex = newcclosure(function(self, key, value)
 end)
 
 setreadonly(mt, true)
-
--- Добавляем WalkSpeed и JumpPower только для первой игры (не 71189885129233)
-if game.PlaceId ~= 71189885129233 and tostring(game.PlaceId) ~= "71189885129233" then
-    -- Добавляем WalkSpeed toggle в секцию движения
-    WalkSpeedToggle = PlayerMovementSection:Toggle({
-        name = "WalkSpeed",
-        default = false,
-        flag = "player_walkspeed",
-        callback = function(v)
-            moveSettings.WalkSpeedEnabled = v
-            
-            -- Обновляем WalkSpeed для текущего персонажа
-            char = o.getChar()
-            if char then
-                hum = char:FindFirstChildOfClass("Humanoid")
-                if hum then
-                if v then
-                        hum.WalkSpeed = moveSettings.WalkSpeed
-                else
-                        hum.WalkSpeed = 16 -- Стандартное значение
-                    end
-                end
-            end
-        end
-    })
-
-    WalkSpeedPopup = WalkSpeedToggle:Popup({size = 150})
-    WalkSpeedPopup:Slider({
-        name = "Speed",
-        min = 16,
-        max = 120,
-        default = 16,
-        float = 1,
-        flag = "player_walkspeed_amount",
-        callback = function(v)
-            moveSettings.WalkSpeed = v
-            
-            -- Обновляем WalkSpeed для текущего персонажа если включен тогл
-            if moveSettings.WalkSpeedEnabled then
-                char = o.getChar()
-                if char then
-                    hum = char:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        hum.WalkSpeed = v
-                    end
-                end
-            end
-        end
-    })
-
-    -- Добавляем JumpPower toggle в секцию движения
-    JumpPowerToggle = PlayerMovementSection:Toggle({
-        name = "Jump Power",
-        default = false,
-        flag = "player_jumppower",
-        callback = function(v)
-            moveSettings.JumpPowerEnabled = v
-            
-            -- Обновляем JumpPower для текущего персонажа
-            char = o.getChar()
-            if char then
-                hum = char:FindFirstChildOfClass("Humanoid")
-                if hum then
-                if v then
-                        hum.JumpPower = moveSettings.JumpPower
-                else
-                        hum.JumpPower = 50 -- Стандартное значение
-                    end
-                end
-            end
-        end
-    })
-
-    JumpPowerPopup = JumpPowerToggle:Popup({size = 150})
-    JumpPowerPopup:Slider({
-        name = "Power",
-        min = 30,
-        max = 200,
-        default = 50,
-        float = 1,
-        flag = "player_jumppower_amount",
-        callback = function(v)
-            moveSettings.JumpPower = v
-            
-            -- Обновляем JumpPower для текущего персонажа если включен тогл
-            if moveSettings.JumpPowerEnabled then
-                char = o.getChar()
-                if char then
-                    hum = char:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        hum.JumpPower = v
-                    end
-                end
-            end
-        end
-    })
-end
-
--- Anti-Inertia
-AntiInertiaSettings = {
-    Speed = {
-        Ground = 0.3,
-        Air = 0.3
-    },
-    NoInertia = true
-}
-
-PlayerMovementSection:Toggle({
-    name = "Anti Inertia",
-    default = false,
-    flag = "player_anti_inertia"
-})
-
--- Создаем отдельное соединение для Anti-Inertia
-if o.antiInertiaConnection then
-    o.antiInertiaConnection:Disconnect()
-    o.antiInertiaConnection = nil
-end
-
-o.antiInertiaConnection = o.rs.Heartbeat:Connect(function()
-    if not Library.Flags["player_anti_inertia"] then return end
-    
-    o.common_vars.char = o.getChar()
-    if not o.common_vars.char then return end
-    
-    -- Проверяем наличие HumanoidRootPart более безопасно
-    o.common_vars.hrp = o.common_vars.char:FindFirstChild(o.parts.HRP)
-    if not o.common_vars.hrp or not o.common_vars.hrp:IsDescendantOf(game) then return end
-    
-    o.common_vars.hum = o.common_vars.char:FindFirstChildOfClass("Humanoid")
-    if not o.common_vars.hum then return end
-    
-    -- Получаем направление движения
-    o.common_vars.moveDir = o.common_vars.hum.MoveDirection
-    
-    if o.common_vars.moveDir.Magnitude > 0 then
-        -- Определяем множитель скорости в зависимости от состояния (в воздухе или на земле)
-        o.common_vars.speedMult = (o.common_vars.hum:GetState() == Enum.HumanoidStateType.Freefall or o.common_vars.hum:GetState() == Enum.HumanoidStateType.Jumping)
-            and AntiInertiaSettings.Speed.Air or AntiInertiaSettings.Speed.Ground
-        
-        -- Вычисляем новую скорость
-        o.common_vars.newVel = o.common_vars.moveDir * o.common_vars.speedMult * 50
-        
-        -- Применяем новую скорость с учетом настроек инерции
-        if AntiInertiaSettings.NoInertia then
-            -- Режим без инерции - мгновенное изменение скорости
-            pcall(function()
-                if o.common_vars.hrp and o.common_vars.hrp:IsDescendantOf(game) then
-                    o.common_vars.hrp.Velocity = o.funcs.v3(o.common_vars.newVel.X, o.common_vars.hrp.Velocity.Y, o.common_vars.newVel.Z)
-                end
-            end)
-        else
-            -- Режим с инерцией - плавное изменение скорости
-            pcall(function()
-                if o.common_vars.hrp and o.common_vars.hrp:IsDescendantOf(game) then
-                    o.common_vars.curVel = o.common_vars.hrp.Velocity
-                    o.common_vars.hrp.Velocity = o.funcs.v3(
-                        o.common_vars.curVel.X + (o.common_vars.newVel.X - o.common_vars.curVel.X) * 0.5,
-                        o.common_vars.hrp.Velocity.Y,
-                        o.common_vars.curVel.Z + (o.common_vars.newVel.Z - o.common_vars.curVel.Z) * 0.5
-                    )
-                end
-            end)
-        end
-    elseif AntiInertiaSettings.NoInertia then
-        -- Если нет движения и включен режим без инерции, обнуляем горизонтальную скорость
-        pcall(function()
-            if o.common_vars.hrp and o.common_vars.hrp:IsDescendantOf(game) then
-                o.common_vars.hrp.Velocity = o.funcs.v3(0, o.common_vars.hrp.Velocity.Y, 0)
-    end
-end)
-    end
-end)
